@@ -6,9 +6,8 @@ An end-to-end, production-quality **Knowledge-Grounded Voice AI Agent** built fo
 
 ---
 
-## 📋 Assignment Deliverables — All 4 Questions Addressed
 
-### ✅ Question 1 — Knowledge-Grounded Voice Agent (Voice Studio Page)
+Knowledge-Grounded Voice Agent (Voice Studio Page)
 | Feature | Implementation |
 |---|---|
 | Full Speech-to-Speech Loop | Browser Mic → Web Speech API (ASR) → Express Gateway → FastAPI RAG → Gemini LLM → Browser TTS |
@@ -17,7 +16,7 @@ An end-to-end, production-quality **Knowledge-Grounded Voice AI Agent** built fo
 | Multi-Market Agents | Aria (India, `en-IN`), Maya (Philippines, `fil-PH`), Budi (Indonesia, `id-ID`) |
 | Citation Engine | Every RAG response shows source document + `XX.X% match` similarity score |
 
-### ✅ Question 2 — Production Knowledge Base (RAG + FAISS 3072d)
+ Production Knowledge Base (RAG + FAISS 3072d)
 | Feature | Implementation |
 |---|---|
 | Document Ingestion | FastAPI service parses PDF/TXT → cleans → chunks (300 tokens) → embeds → stores in FAISS |
@@ -26,14 +25,14 @@ An end-to-end, production-quality **Knowledge-Grounded Voice AI Agent** built fo
 | LLM Generation | `models/gemma-4-26b-a4b-it` / Gemini Flash with 2.0s deterministic fallback synthesizer |
 | Source Citations | Document name + percentage match score on every query response |
 
-### ✅ Question 3 — Native Language Voice Bots (Localization)
+ Native Language Voice Bots (Localization)
 | Agent | Language | Market Focus |
 |---|---|---|
 | **Aria** 🇮🇳 | English (Indian accent, `en-IN`) | Personal Loans, Insurance, LTV, IRDAI compliance |
 | **Maya** 🇵🇭 | Taglish (`fil-PH`) | Life insurance premiums, *bayad*, *benepisyaryo*, *free look period* |
 | **Budi** 🇮🇩 | Bahasa Indonesia (`id-ID`) | Motor loans, *Cicilan*, *DP 20%*, *Tenor*, *Jatuh tempo* |
 
-### ✅ Question 4 — Live Insights & Real-Time Nudge Engine (Mission Control Page)
+Live Insights & Real-Time Nudge Engine (Mission Control Page)
 | Feature | Implementation |
 |---|---|
 | Signal Extraction | Real-time: `Buying Signal`, `Compliance Risk`, `Customer Frustration`, `Human Escalation` |
@@ -44,7 +43,7 @@ An end-to-end, production-quality **Knowledge-Grounded Voice AI Agent** built fo
 
 ---
 
-## 🏗️ System Architecture
+🏗️ System Architecture
 
 The architecture diagram is available as `architecture.mermaid` (paste into [mermaid.live](https://mermaid.live) to render). Text overview:
 
