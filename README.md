@@ -45,8 +45,6 @@ Live Insights & Real-Time Nudge Engine (Mission Control Page)
 
 🏗️ System Architecture
 
-The architecture diagram is available as `architecture.mermaid` (paste into [mermaid.live](https://mermaid.live) to render). Text overview:
-
 ```
                         React Dashboard (:3000)
                               │
@@ -139,22 +137,6 @@ Darwix_Voice_Intelligence_Suite/
 │   └── known_limitations.md        # Production constraints & roadmap
 └── README.md
 ```
-
-## 📹 Video Walkthrough
-
-A full walkthrough script covering every required topic is at `VIDEO_WALKTHROUGH_SCRIPT.md`.
-
-**Required topics covered in the script:**
-- System overview and live demonstration
-- Architecture and key design decisions
-- Knowledge-base/retrieval design and voice-agent flow
-- Multilingual handling and live nudge generation
-- Error/fallback cases, limitations, and production improvements
-
-To record: follow `VIDEO_WALKTHROUGH_SCRIPT.md` with a screen-recorder (OBS, Loom, QuickTime) showing `localhost:3000` dashboard + terminal side-by-side. Target 12–15 minutes.
-
----
-
 ## 📡 Environment Notes — Production vs. Sandbox
 
 This repository includes **two deployment profiles:**
