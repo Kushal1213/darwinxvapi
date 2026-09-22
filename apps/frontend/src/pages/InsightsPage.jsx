@@ -372,9 +372,10 @@ export default function InsightsPage() {
                       timestamp: new Date().toLocaleTimeString(),
                     }));
                   }
-                }}\n                className=\"flex-1 py-2 px-3 rounded-lg bg-[#EF4444]/20 hover:bg-[#EF4444]/30 text-[#EF4444] font-bold text-xs border border-[#EF4444]/40 transition-all flex items-center justify-center space-x-1.5\"
+                }}
+                className="flex-1 py-2 px-3 rounded-lg bg-[#EF4444]/20 hover:bg-[#EF4444]/30 text-[#EF4444] font-bold text-xs border border-[#EF4444]/40 transition-all flex items-center justify-center space-x-1.5\"
               >
-                <AlertTriangle className=\"w-3.5 h-3.5\" />
+                <AlertTriangle className="w-3.5 h-3.5" />
                 <span>Simulate Escalation (Live Nudge)</span>
               </button>
 
@@ -423,9 +424,10 @@ export default function InsightsPage() {
                       timestamp: new Date().toLocaleTimeString(),
                     }));
                   }
-                }}\n                className=\"flex-1 py-2 px-3 rounded-lg bg-[#22C55E]/20 hover:bg-[#22C55E]/30 text-[#22C55E] font-bold text-xs border border-[#22C55E]/40 transition-all flex items-center justify-center space-x-1.5\"
+                }}
+                className="flex-1 py-2 px-3 rounded-lg bg-[#22C55E]/20 hover:bg-[#22C55E]/30 text-[#22C55E] font-bold text-xs border border-[#22C55E]/40 transition-all flex items-center justify-center space-x-1.5\"
               >
-                <TrendingUp className=\"w-3.5 h-3.5\" />
+                <TrendingUp className="w-3.5 h-3.5" />
                 <span>Simulate Cross-Sell (Live Nudge)</span>
               </button>
 
