@@ -1,0 +1,74 @@
+BAJAJ FINSERV — PERSONAL LOAN & BUSINESS LOAN GUIDE
+
+PERSONAL LOAN:
+
+ELIGIBILITY CRITERIA:
+- Age: 21 to 80 years
+- Employment: Salaried (employed with an MNC, public/private limited company, government) or self-employed
+- Minimum monthly income (salaried): Rs. 25,000 (varies by city)
+- Minimum annual income (self-employed): Rs. 2 lakhs
+- CIBIL score: 685 and above (higher score = better interest rate)
+- Work experience: Minimum 1 year with current employer
+
+LOAN DETAILS:
+- Loan amount: Rs. 20,000 to Rs. 55 lakhs
+- Interest rate: 11% to 35% per annum (reducing balance)
+- Tenure: 12 to 96 months (8 years)
+- Processing fee: Up to 3.93% of loan amount + applicable taxes
+- Foreclosure charges: 4% of outstanding principal after 6 EMI payments
+
+DOCUMENTS REQUIRED (Salaried):
+- KYC: PAN card + Aadhaar card / Voter ID / Passport
+- Income proof: Last 3 months salary slips
+- Bank statements: Last 3 months
+- Employment proof: Offer letter or employee ID
+
+DOCUMENTS REQUIRED (Self-Employed):
+- KYC: PAN card + Aadhaar card
+- Income proof: ITR for last 2 years with computation of income
+- Business proof: GST registration certificate, business registration
+- Bank statements: Last 6 months (business account)
+
+LOAN PROCESS:
+1. Apply online or at branch
+2. Document verification: 24-48 hours
+3. Credit check and approval: 1-2 business days
+4. Disbursal: Within 24 hours of approval for pre-approved customers
+
+EMI CALCULATION EXAMPLE:
+Loan: Rs. 5,00,000 | Rate: 16% p.a. | Tenure: 48 months
+EMI: Approximately Rs. 14,200 per month
+Total interest paid: Rs. 1,81,600
+
+FREQUENTLY ASKED QUESTIONS:
+
+Q: Can I get a loan without salary slip?
+A: Self-employed individuals can apply with ITR and bank statements instead of salary slips.
+
+Q: What if my CIBIL score is below 685?
+A: You may still get a loan at a higher interest rate. We recommend improving your CIBIL score by clearing existing dues and maintaining a credit utilization below 30%.
+
+Q: Can I prepay my loan?
+A: Yes. Part-prepayment (minimum 3 EMIs) allowed after 6 EMIs. Full foreclosure allowed after 6 EMIs with 4% charges on outstanding principal.
+
+Q: What is the maximum EMI-to-income ratio?
+A: Your total monthly EMI obligations (all loans) should not exceed 50% of your net monthly income.
+
+Q: How is the interest rate decided?
+A: Based on your CIBIL score, income, loan amount, tenure, and employer category. Better profile = lower interest rate.
+
+Q: Can I get a top-up on my existing loan?
+A: Yes, after 6 months of regular EMI payments, you can apply for a top-up loan.
+
+BUSINESS LOAN:
+- Amount: Rs. 2 lakhs to Rs. 80 lakhs
+- Collateral-free (unsecured)
+- Tenure: 12 to 96 months
+- Eligibility: Business vintage of minimum 3 years, annual turnover as per IT returns
+
+LOAN AGAINST PROPERTY (LAP):
+- Amount: Rs. 10 lakhs to Rs. 5 crores
+- LTV: Up to 80% of property value
+- Tenure: Up to 15 years
+- Eligible properties: Residential, commercial, industrial
+- Rate: Starting from 9.75% p.a.

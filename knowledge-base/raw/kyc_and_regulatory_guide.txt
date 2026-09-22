@@ -1,0 +1,82 @@
+KYC (KNOW YOUR CUSTOMER) — COMPLETE GUIDE FOR FINANCIAL SERVICES
+
+WHAT IS KYC?
+Know Your Customer (KYC) is a mandatory process required by RBI and SEBI for all financial institutions in India. It verifies the identity of customers and helps prevent money laundering and financial fraud.
+
+MANDATORY KYC DOCUMENTS:
+
+PROOF OF IDENTITY (any one):
+- PAN Card (mandatory for loans above Rs. 50,000 and insurance)
+- Aadhaar Card (12-digit unique identity number)
+- Passport
+- Voter's ID Card
+- Driving License
+- NREGA Job Card (signed by State Government Officer)
+
+PROOF OF ADDRESS (any one):
+- Aadhaar Card (with current address)
+- Passport
+- Voter ID Card
+- Driving License
+- Utility bills (electricity, water, gas) — not older than 2 months
+- Bank account statement — not older than 3 months
+- Rent agreement (registered)
+
+INCOME PROOF:
+Salaried: Latest 3 months salary slips + 6 months bank statements + Form 16
+Self-employed: Latest 2 years ITR + audited P&L + 6 months bank statements
+
+CKYC (CENTRAL KYC):
+- One-time KYC registration valid across all financial institutions
+- CKYC number (14-digit) can be used instead of submitting documents again
+- Available through any registered financial institution
+
+VIDEO KYC (V-CIP):
+- Completely paperless, digital KYC via video call
+- RBI-approved for banks, NBFCs, and insurance companies
+- Real-time verification with live photograph and document scanning
+
+RBI GUIDELINES ON FAIR LENDING PRACTICES:
+
+1. TRANSPARENCY: Lenders must disclose all terms before loan sanction
+   - Interest rate (APR — Annual Percentage Rate)
+   - All fees and charges (processing, documentation, foreclosure)
+   - Repayment schedule
+   - Consequences of default
+
+2. LOAN SANCTION LETTER must include:
+   - Loan amount sanctioned
+   - Rate of interest (fixed or floating)
+   - Tenure
+   - EMI amount
+   - Processing fee details
+   - Prepayment terms
+
+3. NO HARASSMENT: RBI prohibits:
+   - Calls before 7 AM or after 7 PM for recovery
+   - Calls to references/family members except as co-borrowers
+   - Threatening or abusive behavior
+   - Public shaming of defaulters
+   
+4. GRIEVANCE REDRESSAL:
+   - All NBFCs/Banks must have a grievance officer
+   - Complaint must be addressed within 30 days
+   - Escalation: RBI Banking Ombudsman if bank doesn't resolve in 30 days
+   - Online complaint: cms.rbi.org.in
+
+IRDAI CUSTOMER PROTECTION RULES (INSURANCE):
+
+1. FREE-LOOK PERIOD: 15 days (30 days for distance marketing)
+   - Customer can return policy within this period
+   - Refund: Full premium minus proportionate risk premium and stamp duty
+
+2. CLAIM SETTLEMENT:
+   - Life insurance death claims: Must be settled within 30 days
+   - Health claims (cashless): Authorization within 1 hour of request
+   - Health claims (reimbursement): Within 30 days of document submission
+
+3. PORTABILITY: Health insurance can be ported to another insurer
+   - Apply 45 days before renewal
+   - Pre-existing conditions covered from day 1 if continuous coverage
+
+4. GRIEVANCE: Insurance Ombudsman if insurer doesn't resolve in 30 days

@@ -1,0 +1,38 @@
+INSURANCE PRODUCT FAQ — AGENT REFERENCE GUIDE v1.8
+
+Q: What is a rider?
+A: A rider is an optional add-on benefit that can be attached to a base insurance policy for additional coverage. Common riders include: Accidental Death Benefit, Critical Illness Rider, Waiver of Premium Rider, Term Rider.
+
+Q: What is the free-look period?
+A: The free-look period is 15 days from receipt of the policy document (30 days for policies sold through distance marketing). During this period, the customer can return the policy for a full refund minus medical examination costs and stamp duty.
+
+Q: What happens if a customer misses a premium payment?
+A: A grace period of 30 days (for monthly premium) or 30 days (for annual premium) is provided. If premium is not paid within the grace period, the policy lapses. A lapsed policy can be revived within 2 years by paying all outstanding premiums with interest (typically 8% per annum).
+
+Q: What is sum assured?
+A: Sum assured is the guaranteed amount the insurance company will pay to the nominee/beneficiary upon death of the life insured, or to the policyholder upon maturity of the policy.
+
+Q: Who is a beneficiary/nominee?
+A: The nominee is the person designated by the policyholder to receive the death benefit in case of the insured's demise. The nominee should be a family member. Can be changed during the policy term.
+
+Q: What is a lapse?
+A: A policy lapses when premiums are not paid even after the grace period. A lapsed policy does not provide any death coverage. Revival is possible within 2 years.
+
+Q: What is the claim process?
+A: 1. Inform the insurance company within 30 days of the event
+   2. Submit claim form along with required documents
+   3. Investigation if required (typically completed within 30 days)
+   4. Claim settled within 30 days of receiving all documents (IRDAI mandate)
+
+Q: What is UIN number?
+A: Unique Identification Number issued by IRDAI to every approved insurance product. Used for policy traceability and regulatory compliance.
+
+COMMON CUSTOMER OBJECTIONS AND RESPONSES:
+Objection: "I already have insurance from my employer"
+Response: "Group cover from employer typically provides only basic coverage and stops when you leave the job. A personal policy gives you lifelong, portable coverage that you control."
+
+Objection: "Insurance is just a way to make money off me"
+Response: "I understand the concern. Let me walk you through exactly what you pay and what coverage you get. The peace of mind it provides for your family is real and measurable."
+
+Objection: "I'll think about it and call back"
+Response: "Of course, take your time. May I share the policy document on your registered email so you have all details handy? I can also schedule a call at your convenient time."

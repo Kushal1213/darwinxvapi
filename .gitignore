@@ -1,0 +1,57 @@
+# Darwix Voice Intelligence Suite — .gitignore
+
+# ── Environment / Secrets ────────────────────────────────────
+.env
+.env.local
+.env.production
+*.env
+
+# ── Node ─────────────────────────────────────────────────────
+node_modules/
+dist/
+build/
+.next/
+.turbo/
+*.log
+
+# ── Python ───────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyc
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+htmlcov/
+
+# ── Vector DB / Index ────────────────────────────────────────
+knowledge-base/embeddings/*.index
+knowledge-base/embeddings/*.faiss
+knowledge-base/embeddings/chroma/
+*.pkl
+
+# ── OS ───────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE ──────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+
+# ── SQLite ───────────────────────────────────────────────────
+*.db
+*.sqlite3
+
+# ── Uploads / Raw Documents ──────────────────────────────────
+# Keep directory but ignore raw PDF/docx binaries if large
+knowledge-base/raw/*.pdf
+knowledge-base/raw/*.docx
+
+# ── Videos / Recordings (use external storage) ───────────────
+videos/*.mp4
+videos/*.mkv
+demo/*.wav
+demo/*.mp3

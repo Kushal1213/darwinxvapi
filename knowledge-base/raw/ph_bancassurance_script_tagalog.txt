@@ -1,0 +1,43 @@
+BANCASSURANCE AGENT SCRIPT — PHILIPPINES MARKET
+Language: Taglish (natural code-switching)
+Sector: Life Insurance via Bank Channel
+
+OPENING:
+"Magandang araw po! Ito po si [Agent Name] mula sa [Bank Name]. Tumatawag po ako para sa inyong life insurance coverage na kasama sa inyong bank account. Mayroon po ba kayong ilang minuto para pag-usapan ito?"
+
+QUALIFICATION QUESTIONS:
+"Para malaman po namin kung anong coverage ang pinaka-akma para sa inyo, may ilang tanong lang po ako."
+- "Ilang taon na po kayo?" (Age verification)
+- "Nagtatrabaho po ba kayo o may sariling negosyo?" (Employment status)
+- "Mayroon na po ba kayong existing na life insurance?" (Existing coverage)
+- "Magkano po ang budget ninyo para sa monthly premium?" (Affordability)
+
+KEY PRODUCT TERMS (use naturally, don't force):
+- Premium = "bayad sa insurance" or "monthly premium"
+- Beneficiary = "benepisyaryo" or "ang tatanggap ng pera"
+- Rider = "additional coverage" or "dagdag na proteksyon"
+- Coverage = "protection" or "halaga ng proteksyon"
+- Lapse = "mag-expire ang policy" or "mawalan ng coverage"
+- Sum assured = "guaranteed na halaga" or "death benefit"
+- Bank referral = "inirekomenda ng inyong bangko"
+
+OBJECTION HANDLING:
+Objection: "Mahal naman ang premium"
+Response: "Naiintindihan ko po. Pero isipin po natin — ang [amount] kada buwan ay katumbas ng proteksyon na [sum assured] para sa inyong pamilya. Mas mura po ito kaysa sa aabutin ng gastos kung walang insurance."
+
+Objection: "Hindi ko kailangan, bata pa ako"
+Response: "Tama po kayo na bata pa kayo — at iyon mismo ang dahilan kung bakit mas mababa ang inyong premium ngayon. Habang tumatanda, mas mahal na ang insurance. Ang mga nasa edad ninyo ang pinaka-ideal na mag-avail."
+
+Objection: "Mag-iisip muna ako"
+Response: "Sige po, walang problema. Para naman hindi kayo mag-aaksaya ng oras sa paghanap, puwede ko pong ipadala sa inyo ang lahat ng detalye sa inyong email. Kailan po ba kayo pwede matawagan ulit?"
+
+COMPLIANCE REMINDERS:
+- Always confirm customer's recorded consent before discussing premium amounts
+- Never guarantee specific returns or investment performance
+- Always mention the free-look period (15 days to cancel without penalty)
+- Document all commitments made during the call
+
+CODE-SWITCHING EXAMPLES (natural Taglish):
+- "Your premium po ay due next month — nakatanggap na po ba kayo ng notice?"
+- "Ang benefit ninyo ay tax-free po, so lahat ng makukuha ng inyong pamilya is fully theirs"
+- "Pwede po ninyong i-update ang inyong beneficiary anytime — online or sa branch"

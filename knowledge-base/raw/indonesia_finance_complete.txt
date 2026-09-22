@@ -1,0 +1,88 @@
+PANDUAN PEMBIAYAAN KONSUMEN INDONESIA
+(Consumer Finance Guide — Bahasa Indonesia)
+
+TENTANG INDUSTRI PEMBIAYAAN:
+Perusahaan pembiayaan (multifinance) di Indonesia diawasi oleh OJK (Otoritas Jasa Keuangan).
+Produk utama: pembiayaan kendaraan bermotor, elektronik, dan pinjaman personal.
+
+ISTILAH KEUANGAN PENTING:
+
+CICILAN / ANGSURAN:
+Pembayaran bulanan yang harus dilakukan nasabah. Jumlahnya tetap setiap bulan selama tenor.
+Contoh: "Cicilan anda adalah Rp 1.500.000 per bulan selama 24 bulan."
+
+DP (DOWN PAYMENT) / UANG MUKA:
+Pembayaran awal yang dibayarkan di muka. Semakin besar DP, semakin kecil cicilan bulanan.
+Contoh: "DP minimum untuk motor ini adalah 20% dari harga atau Rp 4.000.000."
+
+TENOR:
+Jangka waktu pinjaman/pembiayaan dalam satuan bulan.
+Contoh: "Tenor yang tersedia adalah 12, 24, 36, atau 48 bulan."
+
+JATUH TEMPO:
+Tanggal batas pembayaran angsuran setiap bulannya.
+Contoh: "Jatuh tempo pembayaran Anda adalah tanggal 10 setiap bulan."
+
+ANGSURAN: Sinonim untuk cicilan (lebih formal).
+
+PEMBIAYAAN: Istilah resmi untuk financing/credit dari lembaga non-bank (NBFC).
+
+DENDA KETERLAMBATAN:
+Biaya yang dikenakan jika pembayaran dilakukan setelah jatuh tempo.
+Biasanya 0.5-1% per hari dari jumlah angsuran tertunggak.
+
+PELUNASAN DIPERCEPAT:
+Melunasi seluruh pinjaman sebelum tenor berakhir.
+Biasanya dikenakan biaya pelunasan dipercepat 3-5% dari sisa pokok.
+
+RESTRUKTURISASI:
+Program penyesuaian cicilan bagi nasabah yang mengalami kesulitan keuangan.
+Opsi: perpanjangan tenor, pengurangan cicilan, atau penundaan pembayaran sementara.
+
+SURVEY:
+Proses verifikasi data nasabah yang dilakukan petugas lapangan ke rumah/tempat usaha.
+
+PRODUK PEMBIAYAAN UTAMA:
+
+1. PEMBIAYAAN KENDARAAN BERMOTOR (MOTOR/MOBIL)
+   - DP minimum: 20% untuk motor, 25% untuk mobil
+   - Tenor: 12-48 bulan (motor), 12-60 bulan (mobil)
+   - Bunga: Flat 1.5-3% per bulan (motor), 0.8-1.5% per bulan (mobil)
+   - Dokumen: KTP, KK, slip gaji/SPT, rekening koran 3 bulan
+
+2. KREDIT MULTIGUNA (PINJAMAN PERSONAL)
+   - Jumlah: Rp 1 juta - Rp 300 juta
+   - Tenor: 6-48 bulan
+   - Bunga: Flat 1.5-4% per bulan
+   - Tanpa agunan (untuk pinjaman kecil)
+
+3. PEMBIAYAAN ELEKTRONIK / CONSUMER DURABLE
+   - Cicilan 0% untuk produk tertentu
+   - Tenor: 3-24 bulan
+   - Di merchant/toko rekanan
+
+PERSYARATAN UMUM:
+- WNI berusia 21-60 tahun
+- KTP dan KK
+- Slip gaji 3 bulan (karyawan) atau SPT/rekening koran (wirausaha)
+- Tidak memiliki tunggakan di OJK/SLIK
+- Rasio cicilan terhadap penghasilan: maksimal 30-40%
+
+SKENARIO PERCAKAPAN:
+
+Nasabah: "Bunganya terlalu tinggi."
+Agen: "Bapak/Ibu, kami memahami. Kami memiliki beberapa program promosi dengan bunga 0% untuk tenor pendek. Selain itu, jika Bapak/Ibu bisa memberikan DP yang lebih besar, cicilan bulanannya akan lebih ringan. Berapa range cicilan yang comfortable untuk Bapak/Ibu?"
+
+Nasabah: "Saya takut tidak bisa bayar nanti."
+Agen: "Kami sangat menghargai kejujuran Bapak/Ibu. Kami memiliki program asuransi jiwa yang bisa melindungi Bapak/Ibu — jika ada hal yang tidak diinginkan, cicilan ditanggung oleh asuransi. Selain itu, jika ada kesulitan, Bapak/Ibu bisa menghubungi kami untuk program restrukturisasi sebelum jatuh tempo."
+
+Nasabah: "Prosesnya lama."
+Agen: "Justru kami memiliki proses yang sangat cepat — untuk pinjaman di bawah Rp 50 juta, keputusan bisa diberikan dalam 1 hari kerja. Dokumen yang diperlukan minimal, dan survei bisa dijadwalkan sesuai waktu Bapak/Ibu."
+
+REGULASI OJK PENTING:
+- Perusahaan pembiayaan wajib menyampaikan informasi produk secara transparan
+- Biaya dan bunga harus dijelaskan dalam bentuk APR (Annual Percentage Rate)
+- Penagihan hanya boleh dilakukan pukul 08.00-20.00
+- Penagihan dengan kekerasan/ancaman dilarang keras (pelanggaran pidana)
+- Nasabah berhak mendapatkan salinan kontrak pembiayaan
+- Pengaduan dapat disampaikan ke OJK melalui 157 atau email konsumen@ojk.go.id

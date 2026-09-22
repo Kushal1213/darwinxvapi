@@ -1,0 +1,80 @@
+flowchart TB
+    subgraph CUSTOMER["Customer / Caller"]
+        PHONE["📱 Phone / Browser\n(Vapi Web SDK)"]
+    end
+
+    subgraph VAPI["Voice Platform (Vapi)"]
+        ASR["🎙️ ASR\n(Deepgram nova-2)\n~220ms latency"]
+        TTS["🔊 TTS\n(Azure Neural Voices)\nen-IN / fil-PH / id-ID"]
+        VAPI_WEBHOOK["Vapi Webhook\n(transcript events)"]
+    end
+
+    subgraph GATEWAY["Express API Gateway :3001"]
+        WEBHOOK_ROUTE["POST /api/voice/webhook"]
+        LLM_ROUTE["POST /api/voice/vapi-llm\n(Custom LLM endpoint)"]
+        SOCKET["Socket.IO Server\n(live broadcast)"]
+        FEED["feedToInsightsEngine()\n(async, graceful degrade)"]
+    end
+
+    subgraph RAG["FastAPI RAG Service :8001"]
+        FAISS["FAISS 3072d Index\n(gemini-embedding-001)"]
+        GEMINI_LLM["Gemini 2.0 Flash\n(grounded generation)"]
+        RETRIEVE["POST /retrieve\n(top-k chunks + citations)"]
+    end
+
+    subgraph INGESTION["FastAPI Ingestion :8002"]
+        PARSER["PDF/TXT Parser\n+ Quality Gate"]
+        CHUNKER["Chunker\n(180-word + 40-word overlap)"]
+        EMBEDDER["Gemini Embeddings\n(gemini-embedding-001)"]
+    end
+
+    subgraph KB["Knowledge Base"]
+        RAW["20 raw source files\n(TXT + HTML)"]
+        INDEX["FAISS index\n+ metadata.json"]
+        LOCAL["local_retriever.py\n(offline TF-IDF fallback)"]
+    end
+
+    subgraph INSIGHTS["FastAPI Real-Time Insights :8003 (Q4)"]
+        DETECTOR["Signal Detectors\n(5 types, rule-based)"]
+        CONTROLLER["Nudge Controller\n(threshold + cooldown + priority)"]
+        WS["WebSocket /stream/{scenario}"]
+        HTTP_DETECT["POST /detect-signals"]
+    end
+
+    subgraph DASHBOARD["React Dashboard :3000"]
+        VOICE_STUDIO["Voice Studio\n(Q1 live call UI)"]
+        INSIGHTS_PAGE["Mission Control\n(Q4 live nudges)"]
+        KB_HUB["Knowledge Hub\n(Q2 retrieval explorer)"]
+        LANG_MATRIX["Language Matrix\n(Q3 bot configs)"]
+    end
+
+    PHONE -->|audio stream| ASR
+    ASR -->|transcript| VAPI_WEBHOOK
+    VAPI_WEBHOOK -->|POST| WEBHOOK_ROUTE
+    WEBHOOK_ROUTE -->|transcript:update| SOCKET
+    WEBHOOK_ROUTE --> FEED
+    FEED -->|POST /detect-signals| HTTP_DETECT
+    HTTP_DETECT --> DETECTOR
+    DETECTOR --> CONTROLLER
+    CONTROLLER -->|nudge emitted| HTTP_DETECT
+    HTTP_DETECT -.->|nudge events| GATEWAY
+    SOCKET -->|nudge| INSIGHTS_PAGE
+
+    LLM_ROUTE -->|query + session| RETRIEVE
+    RETRIEVE --> FAISS
+    FAISS --> GEMINI_LLM
+    GEMINI_LLM -->|grounded answer + citation| LLM_ROUTE
+    LLM_ROUTE -->|OpenAI-compat response| VAPI_WEBHOOK
+    VAPI_WEBHOOK -->|text| TTS
+    TTS -->|audio| PHONE
+
+    RAW --> PARSER
+    PARSER --> CHUNKER
+    CHUNKER --> EMBEDDER
+    EMBEDDER --> INDEX
+    INDEX --> FAISS
+    RAW --> LOCAL
+    LOCAL -.->|offline fallback| RETRIEVE
+
+    SOCKET -->|transcript:update| VOICE_STUDIO
+    WS -->|chunked nudge stream| INSIGHTS_PAGE

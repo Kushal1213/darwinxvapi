@@ -1,0 +1,61 @@
+VOICE AGENT TEST SCENARIOS
+For Q1 (Voice Agent Testing) and Q4 (Signal Extraction Training)
+
+=== SCENARIO 1: Cooperative Customer — Loan Qualification ===
+AGENT: Good afternoon, this is Aria from SecureFinance. Am I speaking with Rahul Sharma?
+CUSTOMER: Yes, speaking.
+AGENT: Thank you Mr. Sharma. I'm calling regarding your home loan inquiry. Do you have a few minutes?
+CUSTOMER: Yes, go ahead.
+AGENT: Great! To check your eligibility, may I ask your current monthly income?
+CUSTOMER: I earn about 85,000 rupees per month. I work at an IT company.
+AGENT: Excellent. And what loan amount are you looking at?
+CUSTOMER: Around 50 lakhs for a 3BHK apartment in Pune.
+AGENT: That works well. With your income, your loan eligibility should be around 45-55 lakhs. Your EMI at current rates would be approximately 42,000 per month for a 20-year tenure.
+CUSTOMER: That sounds manageable. What documents do I need?
+AGENT: You'll need your PAN card, Aadhaar, last 3 months salary slips, 6 months bank statements, and Form 16.
+[SIGNALS: intent=loan_inquiry, buying_signal=true, sentiment=positive, confidence=0.9]
+
+=== SCENARIO 2: Customer Objection — Insurance ===
+AGENT: Good morning! This is Priya from InsureLife. I'm calling about our term insurance plan that offers 1 crore coverage.
+CUSTOMER: Not interested. I already have LIC.
+AGENT: I understand, Mr. Gupta. May I ask what type of LIC policy you have? Many customers find that their existing coverage doesn't fully protect their family's needs.
+CUSTOMER: I have a money-back policy. Why do I need more?
+AGENT: Money-back policies are great for savings, but they typically offer lower sum assured. A separate term plan ensures your family receives 1 crore even if something happens to you. And the premium is quite affordable — starting at just 800 rupees per month for your age group.
+CUSTOMER: Hmm, 800 rupees doesn't sound too bad actually.
+[SIGNALS: intent=insurance_inquiry, objection_handled=true, buying_signal=true, sentiment=neutral_to_positive]
+
+=== SCENARIO 3: Incomplete Details — Missing Information ===
+AGENT: Hello, I'm calling about your loan pre-approval. Can I confirm your income?
+CUSTOMER: I run a small business.
+AGENT: Great. What's your approximate monthly income from the business?
+CUSTOMER: It varies. Sometimes 30,000, sometimes 80,000.
+AGENT: I understand self-employed income can vary. For loan eligibility, we typically consider the average. Do you file ITR?
+CUSTOMER: Not always. Last 2 years I didn't file.
+AGENT: That might be a challenge as lenders require 2 years of ITR for self-employed applicants. However, there are options — some NBFCs consider bank statement income. Would you like me to check those options?
+[SIGNALS: intent=loan_inquiry, missing_information=true, qualification_status=partial, confidence=0.6]
+
+=== SCENARIO 4: Out-of-Scope Question ===
+AGENT: Hello! Aria here from QuickLoans. How can I help you today?
+CUSTOMER: Hi, can you tell me the current stock price of HDFC Bank?
+AGENT: I appreciate the question, but stock prices are outside what I can help with — that's a bit outside my specialty! I'm focused on loan products. Were you perhaps thinking about an HDFC Bank loan product? I'd be happy to help with that.
+CUSTOMER: Oh no, I just got confused. I actually wanted to ask about a personal loan.
+AGENT: Perfect, I can definitely help with that! What loan amount are you considering?
+[SIGNALS: intent=out_of_scope then loan_inquiry, recovery=true]
+
+=== SCENARIO 5: Human Escalation ===
+AGENT: Good evening! This is Aria. I'm following up on your loan application.
+CUSTOMER: I've been waiting 2 weeks and nobody is helping me! I submitted all documents!
+AGENT: I sincerely apologize for the delay, Mr. Kumar. I completely understand how frustrating this must be.
+CUSTOMER: This is ridiculous. I want to speak to a manager right now.
+AGENT: Absolutely, I'll connect you with our senior specialist immediately. Before I do, let me note your concern so they're fully briefed: you submitted documents 2 weeks ago and haven't received an update. Is there anything else I should add?
+CUSTOMER: Tell them I have a competing offer from another bank expiring in 2 days!
+[SIGNALS: intent=escalation_request, frustration=high, compliance_risk=low, urgency=high, escalate=true]
+
+=== SCENARIO 6: Rising Frustration — Compliance Risk ===
+AGENT: Hello, calling about your overdue EMI payment.
+CUSTOMER: I know I'm late. I don't have money right now.
+AGENT: I understand. We do have restructuring options available—
+CUSTOMER: You people keep calling me 5 times a day! That's harassment!
+AGENT: I sincerely apologize if our calls have felt excessive. By regulation, we're required to—
+CUSTOMER: I'll complain to RBI about this.
+[SIGNALS: compliance_risk=true, frustration=0.9, callback_needed=false, escalate=true, nudge="Acknowledge concern, remind of RBI-compliant call frequency policy, offer restructuring"]

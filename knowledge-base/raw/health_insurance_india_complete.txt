@@ -1,0 +1,117 @@
+HEALTH INSURANCE IN INDIA — COMPREHENSIVE GUIDE
+
+TYPES OF HEALTH INSURANCE:
+
+1. INDIVIDUAL HEALTH PLAN
+   - Covers one person
+   - Sum insured typically Rs. 2 lakhs to Rs. 1 crore
+   - Premiums based on age, health status, sum insured
+
+2. FAMILY FLOATER PLAN
+   - Single policy covering entire family (self, spouse, children)
+   - Sum insured shared among all members
+   - More economical than individual plans for each member
+   - Premium based on eldest member's age
+
+3. CRITICAL ILLNESS PLAN
+   - Pays lump sum on diagnosis of specified critical illnesses
+   - Covers: Cancer, Heart Attack, Stroke, Kidney Failure, Major Organ Transplant (typically 34-40 conditions)
+   - Payment on diagnosis, not on actual medical bills
+   - Useful for income replacement during treatment
+
+4. SUPER TOP-UP PLAN
+   - Additional coverage beyond base plan's sum insured
+   - Activated only after base plan is exhausted
+   - Very cost-effective way to increase total coverage
+
+5. GROUP HEALTH INSURANCE
+   - Provided by employer to employees
+   - No medical tests (usually)
+   - Coverage stops when employment ends
+   - May not cover pre-existing diseases from day 1
+
+KEY TERMS:
+
+DEDUCTIBLE / CO-PAY:
+Amount borne by the insured for each claim.
+Co-pay: You pay X% and insurer pays (100-X)% of claim
+Example: 10% co-pay on Rs. 1 lakh claim = You pay Rs. 10,000
+
+WAITING PERIOD:
+Period after policy inception during which specific claims are not covered.
+- Initial waiting period: 30 days (except accidents)
+- Pre-existing disease waiting period: 2-4 years (as per policy)
+- Specific disease waiting period: 1-2 years (e.g., hernia, cataract)
+
+PRE-EXISTING DISEASE (PED):
+Any condition diagnosed or treated before buying the policy.
+Covered after waiting period (usually 2-4 years of continuous coverage).
+IRDAI mandates coverage of pre-existing diseases after waiting period.
+
+CASHLESS FACILITY:
+Direct settlement between hospital and insurer — no out-of-pocket payment required.
+Available only at network hospitals. Call TPA/insurer helpline upon admission.
+Pre-authorization required for planned hospitalization (except emergencies).
+
+NETWORK HOSPITAL:
+Hospital with a tie-up with the insurer for cashless treatment.
+Always check insurer's network hospital list before choosing a hospital.
+Non-network: Pay first, claim reimbursement later.
+
+REIMBURSEMENT CLAIM:
+Process for claims at non-network hospitals.
+Submit bills within 30 days of discharge.
+Documents needed: Discharge summary, original bills, pharmacy receipts, lab reports, doctor's prescription.
+
+TPA (THIRD PARTY ADMINISTRATOR):
+Company that manages health insurance claims on behalf of insurer.
+Contact TPA for claim intimation, pre-authorization, and cashless queries.
+
+SUM INSURED / SUM ASSURED:
+Maximum amount covered by policy in one year.
+For family floater: Shared among all members.
+
+RESTORE/RECHARGE BENEFIT:
+Automatically restores sum insured if exhausted during the year.
+Available in most premium health plans.
+
+ROOM RENT LIMIT:
+Maximum daily room rent covered (often 1-2% of sum insured).
+Single private room or ICU may have different limits.
+Choose a room within the sublimit to avoid proportionate deductions.
+
+COMMONLY ASKED QUESTIONS:
+
+Q: What is portability in health insurance?
+A: You can switch from one insurer to another without losing accumulated benefits like waiting period credits. Apply 45 days before renewal. IRDAI mandates all insurers to accept portability requests.
+
+Q: Will my claim be rejected if I don't disclose a pre-existing condition?
+A: Yes. Non-disclosure of pre-existing conditions at the time of purchase is grounds for claim rejection and policy cancellation. Always disclose all medical conditions honestly.
+
+Q: Is COVID-19 covered?
+A: Yes. IRDAI mandated coverage of COVID-19 related hospitalization from 2020 onwards.
+
+Q: How much health coverage is adequate?
+A: For a family of 4 in a metro city, Rs. 10-15 lakhs family floater + critical illness cover of Rs. 25-50 lakhs is recommended. Medical inflation is approximately 15% per year.
+
+Q: What's the difference between day care and OPD?
+A: Day care: Procedures requiring less than 24 hours of hospitalization (e.g., cataract surgery, chemotherapy). Most plans cover day care. OPD: Doctor consultations and outpatient treatment. Covered only in specific OPD plans.
+
+STAR HEALTH COMPREHENSIVE PLAN — KEY FEATURES:
+- Sum insured: Rs. 5 lakhs to Rs. 1 crore
+- In-patient hospitalization: Covered (room rent up to 1% of sum insured/day)
+- Pre & post hospitalization: 60 & 90 days
+- Day care procedures: 541 procedures covered
+- Organ donor expenses: Covered
+- AYUSH treatment: Covered up to sum insured
+- Pre-existing diseases: Covered after 3 years
+- No-claim bonus: 10% increase in sum insured for each claim-free year (up to 100%)
+- Annual health check-up: Free after 2 claim-free years
+
+HDFC ERGO OPTIMA SECURE — KEY FEATURES:
+- Sum insured: Rs. 5 lakhs to Rs. 2 crores
+- Restore benefit: Automatically restores sum insured once exhausted
+- No sub-limits on room rent
+- Alternative treatment: Covered
+- Mental illness: Covered (as per IRDAI mandate)
+- Maternity: Covered after 2-year waiting period

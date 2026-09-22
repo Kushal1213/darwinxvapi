@@ -1,0 +1,66 @@
+OBJECTION HANDLING PLAYBOOK — INDIA BFSI VOICE AGENTS
+
+This document covers the most common objections in loan and insurance sales with grounded, effective responses.
+
+INSURANCE OBJECTIONS:
+
+OBJECTION 1: "I already have insurance from my company"
+TYPE: Standard deflection
+SIGNAL: Low urgency, not hostile
+
+RESPONSE (Grounded): "That's great — employer-provided group insurance is a valuable benefit. However, there are two important gaps to consider. First, group insurance typically provides coverage of only 3-4 times your annual salary, which may not be sufficient to replace your income for your family's needs. Second, and more importantly, this coverage is tied to your employment — if you change jobs, take a break, or retire, you lose coverage. A personal policy ensures continuous, portable protection that you own regardless of employment. Can I show you what a top-up coverage would look like at your age?"
+
+OBJECTION 2: "Insurance is a waste of money — I'll get nothing if I don't die"
+TYPE: Misconception about term insurance
+SIGNAL: Needs education, not hostile
+
+RESPONSE (Grounded): "I completely understand this concern — it's actually the most common question I get. Let me ask you this — do you think your car insurance is a waste of money if you don't have an accident? Insurance is a risk transfer mechanism, not an investment. Term insurance ensures that if something were to happen to you, your family doesn't have to sell assets, take loans, or compromise their lifestyle. The peace of mind that your family's future is secured — that's the value you get every single day the policy is active."
+
+OBJECTION 3: "It's too expensive"
+TYPE: Price objection
+SIGNAL: May be interested, looking for justification
+
+RESPONSE (Grounded): "Let me put the cost in perspective. For a 30-year-old, a term plan covering Rs. 1 crore costs approximately Rs. 800-1,000 per month. That's less than Rs. 35 per day — less than a cup of coffee. For that, your family gets Rs. 1 crore in protection. If we break it down, you're paying just 0.001% of the coverage amount as annual premium. Is there a specific budget you had in mind? I can suggest a plan that fits."
+
+OBJECTION 4: "I'll think about it / Call me later"
+TYPE: Stall / avoidance
+SIGNAL: Not necessarily a NO — need to identify real concern
+
+RESPONSE (Grounded): "Of course, please take all the time you need — this is an important decision. May I ask — is there a specific concern you'd like to think through? Many customers initially hesitate about the premium, the policy terms, or which plan to choose. If I know what's on your mind, I can give you the exact information you need to make a confident decision. I can also send you a comparison document by email — would that help?"
+
+---
+
+LOAN OBJECTIONS:
+
+OBJECTION 5: "The interest rate is too high"
+TYPE: Price negotiation
+SIGNAL: Interested in the loan
+
+RESPONSE (Grounded): "I appreciate you bringing this up — it's a fair point. The interest rate on your loan is determined by three key factors: your credit score, your income stability, and the loan amount. With a CIBIL score of 750+, salaried employment, and a good banking relationship, you would qualify for our best rates starting from [X]%. If you have an existing loan at a higher rate, we can also explore a balance transfer to bring down your EMI immediately. What's your current CIBIL score, if you don't mind sharing?"
+
+OBJECTION 6: "I'll take the loan from my bank"
+TYPE: Competitive objection
+SIGNAL: Serious borrower
+
+RESPONSE (Grounded): "That's a great approach — comparing options is exactly what a smart borrower should do. Our key advantages are: faster processing (approval in 24-48 hours vs. 5-7 days at most banks), flexible tenure options, and digital disbursement. Many of our customers who had existing bank relationships still chose us for the speed and simplicity. Would you like me to do a quick comparison — your bank's offer vs. ours — so you can make an informed choice?"
+
+OBJECTION 7: "I don't want to mortgage my property"
+TYPE: Specific objection (LAP)
+SIGNAL: Risk-averse
+
+RESPONSE (Grounded): "I completely understand — your home is precious and this is a big decision. I want to clarify something important: mortgaging doesn't mean giving away your property. You continue to live in it, rent it, or use it exactly as you do today. The bank only holds a legal charge on paper. Physical possession happens only in extreme cases of prolonged default, and even then there are multiple legal steps involved. The mortgage is purely to give you access to a much larger loan amount at a much lower interest rate — 10% vs. 24% for a personal loan. On Rs. 50 lakhs, that's a saving of Rs. 7 lakhs in interest every year."
+
+ESCALATION TRIGGERS (Always escalate when customer says):
+1. "I want to speak to a manager"
+2. "I'm going to complain to RBI / IRDAI"  
+3. "Your agent/representative cheated me"
+4. "I'm taking legal action"
+5. "I've been waiting [X weeks/months] and nobody is helping"
+6. Mentions of mental health crisis or extreme financial distress
+7. Abusive language (end call politely, document)
+
+ESCALATION SCRIPT:
+"Mr./Ms. [Name], I completely understand your frustration and I want to make sure you get the best possible resolution. I'm connecting you right now with [Senior Specialist/Manager Name], who has full authority to resolve this for you. I'm also briefing them on everything we've discussed so you don't have to repeat yourself. Please hold for just a moment."
+
+OUT-OF-SCOPE QUESTIONS:
+"That's a great question, but it falls outside my area of expertise. I want to make sure you get accurate information — let me connect you with the right specialist who can address this correctly."

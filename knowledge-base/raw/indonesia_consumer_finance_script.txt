@@ -1,0 +1,48 @@
+SKRIP AGEN — PEMBIAYAAN KONSUMEN INDONESIA
+Bahasa: Bahasa Indonesia (percakapan, dengan loanword Inggris yang natural)
+Sektor: Multifinance / Cicilan Konsumen
+
+PEMBUKAAN:
+"Selamat pagi/siang/sore, Bapak/Ibu [Nama]. Saya [Nama Agen] dari [Perusahaan]. 
+Saya menghubungi Bapak/Ibu mengenai fasilitas pembiayaan yang tersedia untuk Anda. 
+Apakah Bapak/Ibu memiliki waktu sebentar?"
+
+ISTILAH KEUANGAN UTAMA (gunakan secara natural):
+- Cicilan = angsuran bulanan yang harus dibayarkan
+- DP (Down Payment) = uang muka pembelian
+- Tenor = jangka waktu pinjaman/pembiayaan (dalam bulan)
+- Jatuh tempo = tanggal batas pembayaran cicilan
+- Angsuran = sinonim cicilan, lebih formal
+- Pembiayaan = financing, kredit dari lembaga non-bank
+- Denda = penalti keterlambatan pembayaran
+- Pelunasan dipercepat = early repayment / pelunasan sebelum tenor berakhir
+- Survey = proses verifikasi data nasabah di lapangan
+
+PERTANYAAN KUALIFIKASI:
+- "Bapak/Ibu sedang bekerja atau memiliki usaha sendiri?"
+- "Berapa kira-kira penghasilan bulanan Bapak/Ibu?"
+- "Untuk pembelian apa Bapak/Ibu membutuhkan pembiayaan ini?"
+- "Sudah ada gambaran berapa DP yang bisa Bapak/Ibu siapkan?"
+- "Tenor berapa bulan yang paling nyaman untuk Bapak/Ibu?"
+
+PENANGANAN KEBERATAN:
+Keberatan: "Bunganya terlalu tinggi"
+Respons: "Saya mengerti, Bapak/Ibu. Kami memiliki program cicilan 0% untuk pembelian di merchant tertentu. Untuk bunga reguler, kami bisa coba sesuaikan tenor agar angsuran bulanannya lebih ringan. Berapa angsuran yang comfortable untuk Bapak/Ibu?"
+
+Keberatan: "Saya sudah punya cicilan yang banyak"
+Respons: "Baik, terima kasih sudah jujur. Untuk memastikan Bapak/Ibu tidak overcommitted, kami akan cek total kewajiban bulanan. Secara umum, total cicilan sebaiknya tidak melebihi 30-40% penghasilan bulanan."
+
+Keberatan: "Prosesnya lama dan ribet"
+Respons: "Justru sebaliknya, Bapak/Ibu. Proses approval kami sekarang bisa selesai dalam 1 hari kerja. Dokumen yang diperlukan hanya KTP, slip gaji, dan rekening koran 3 bulan terakhir. Survey juga bisa dijadwalkan sesuai waktu Bapak/Ibu."
+
+SKENARIO JATUH TEMPO:
+"Bapak/Ibu [Nama], saya ingin menginformasikan bahwa angsuran Bapak/Ibu untuk bulan ini jatuh tempo pada tanggal [X]. Total angsuran yang perlu dibayarkan adalah Rp [jumlah]. Apakah ada yang perlu kami bantu untuk memastikan pembayaran lancar?"
+
+Jika nasabah kesulitan bayar:
+"Kami memahami ada situasi yang tidak terduga. Kami memiliki program restrukturisasi yang bisa membantu meringankan cicilan Bapak/Ibu. Boleh saya jelaskan opsi yang tersedia?"
+
+CATATAN COMPLIANCE:
+- Selalu konfirmasi identitas nasabah sebelum membahas detail akun
+- Rekam persetujuan nasabah untuk setiap komitmen yang dibuat
+- Jangan menjanjikan approval sebelum proses verifikasi selesai
+- Informasikan biaya denda keterlambatan secara transparan

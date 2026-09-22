@@ -1,0 +1,20 @@
+{
+  "name": "darwix-voice-intelligence-suite",
+  "version": "1.0.0",
+  "description": "Darwix AI Engineer Assessment — Knowledge-Grounded Voice Agent Platform",
+  "private": true,
+  "workspaces": [
+    "apps/frontend",
+    "apps/api-gateway"
+  ],
+  "scripts": {
+    "dev:gateway": "cd apps/api-gateway && npm run dev",
+    "dev:frontend": "cd apps/frontend && npm run dev",
+    "dev:rag": "cd services/rag-service && uvicorn main:app --reload --port 8001",
+    "dev:ingestion": "cd services/ingestion-service && uvicorn main:app --reload --port 8002",
+    "dev:realtime": "cd services/realtime-ai && uvicorn main:app --reload --port 8003"
+  },
+  "keywords": ["ai", "voice-agent", "rag", "bfsi", "nlp"],
+  "author": "Darwix Assessment",
+  "license": "MIT"
+}

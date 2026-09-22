@@ -1,0 +1,219 @@
+{
+  "total_files": 20,
+  "files": [
+    {
+      "file": "adira_finance_faq.html",
+      "type": "text",
+      "category": "faq",
+      "market": "indonesia",
+      "title": "Adira Finance Faq",
+      "size_kb": 4.3,
+      "version": "1.0",
+      "pii": false
+    },
+    {
+      "file": "bajaj_finserv_loan_guide.txt",
+      "type": "text",
+      "category": "faq",
+      "market": "india",
+      "title": "Bajaj Finserv Loan Guide",
+      "size_kb": 3.0,
+      "version": "1.0",
+      "pii": false
+    },
+    {
+      "file": "hdfc_life_term_insurance.txt",
+      "type": "text",
+      "category": "insurance",
+      "market": "india",
+      "title": "Hdfc Life Term Insurance",
+      "size_kb": 2.8,
+      "version": "1.0",
+      "pii": false
+    },
+    {
+      "file": "health_insurance_india_complete.txt",
+      "type": "text",
+      "category": "insurance",
+      "market": "india",
+      "title": "Health Insurance India Complete",
+      "size_kb": 5.1,
+      "version": "1.0",
+      "pii": false
+    },
+    {
+      "file": "home_credit_india_complete.txt",
+      "type": "text",
+      "category": "faq",
+      "market": "india",
+      "title": "Home Credit India Complete",
+      "size_kb": 2.9,
+      "version": "1.0",
+      "pii": false
+    },
+    {
+      "file": "indonesia_consumer_finance_script.txt",
+      "type": "text",
+      "category": "policy",
+      "market": "indonesia",
+      "title": "Indonesia Consumer Finance Script",
+      "size_kb": 2.8,
+      "version": "1.0",
+      "pii": false
+    },
+    {
+      "file": "indonesia_finance_complete.txt",
+      "type": "text",
+      "category": "general",
+      "market": "indonesia",
+      "title": "Indonesia Finance Complete",
+      "size_kb": 3.9,
+      "version": "1.0",
+      "pii": false
+    },
+    {
+      "file": "insurance_dekho_health_faq.html",
+      "type": "text",
+      "category": "faq",
+      "market": "india",
+      "title": "Insurance Dekho Health Faq",
+      "size_kb": 373.5,
+      "version": "1.0",
+      "pii": false
+    },
+    {
+      "file": "insurance_product_faq_internal.txt",
+      "type": "text",
+      "category": "faq",
+      "market": "india",
+      "title": "Insurance Product Faq Internal",
+      "size_kb": 2.7,
+      "version": "1.0",
+      "pii": false
+    },
+    {
+      "file": "insurancedekho_health_faq.html",
+      "type": "text",
+      "category": "faq",
+      "market": "india",
+      "title": "Insurancedekho Health Faq",
+      "size_kb": 183.3,
+      "version": "1.0",
+      "pii": false
+    },
+    {
+      "file": "kyc_and_regulatory_guide.txt",
+      "type": "text",
+      "category": "faq",
+      "market": "india",
+      "title": "Kyc And Regulatory Guide",
+      "size_kb": 3.1,
+      "version": "1.0",
+      "pii": false
+    },
+    {
+      "file": "loan_against_property_guide.txt",
+      "type": "text",
+      "category": "faq",
+      "market": "india",
+      "title": "Loan Against Property Guide",
+      "size_kb": 3.3,
+      "version": "1.0",
+      "pii": false
+    },
+    {
+      "file": "loan_qualification_rules.txt",
+      "type": "text",
+      "category": "faq",
+      "market": "india",
+      "title": "Loan Qualification Rules",
+      "size_kb": 1.5,
+      "version": "1.0",
+      "pii": false
+    },
+    {
+      "file": "objection_handling_playbook.txt",
+      "type": "text",
+      "category": "policy",
+      "market": "india",
+      "title": "Objection Handling Playbook",
+      "size_kb": 5.7,
+      "version": "1.0",
+      "pii": false
+    },
+    {
+      "file": "ph_bancassurance_script_tagalog.txt",
+      "type": "text",
+      "category": "policy",
+      "market": "philippines",
+      "title": "Ph Bancassurance Script Tagalog",
+      "size_kb": 2.5,
+      "version": "1.0",
+      "pii": false
+    },
+    {
+      "file": "ph_life_insurance_complete.txt",
+      "type": "text",
+      "category": "insurance",
+      "market": "philippines",
+      "title": "Ph Life Insurance Complete",
+      "size_kb": 4.5,
+      "version": "1.0",
+      "pii": false
+    },
+    {
+      "file": "policybazaar_health_faq.html",
+      "type": "text",
+      "category": "faq",
+      "market": "india",
+      "title": "Policybazaar Health Faq",
+      "size_kb": 21.1,
+      "version": "1.0",
+      "pii": false
+    },
+    {
+      "file": "sbi_life_insurance_guide.txt",
+      "type": "text",
+      "category": "faq",
+      "market": "india",
+      "title": "Sbi Life Insurance Guide",
+      "size_kb": 3.8,
+      "version": "1.0",
+      "pii": false
+    },
+    {
+      "file": "tata_capital_loan_guide.txt",
+      "type": "text",
+      "category": "faq",
+      "market": "india",
+      "title": "Tata Capital Loan Guide",
+      "size_kb": 2.4,
+      "version": "1.0",
+      "pii": false
+    },
+    {
+      "file": "voice_agent_conversation_scenarios.txt",
+      "type": "text",
+      "category": "policy",
+      "market": "india",
+      "title": "Voice Agent Conversation Scenarios",
+      "size_kb": 4.9,
+      "version": "1.0",
+      "pii": false
+    }
+  ],
+  "note": "9 PDF entries referenced in the original manifest were not present on disk (they were never committed to the repo) and have been removed from this manifest so it matches what is actually indexed. See evaluation/known_limitations.md.",
+  "removed_missing_files": [
+    "36102.pdf",
+    "c688.pdf",
+    "Final-Policy-Doc_LIC-s-Jeevan-Umang (1).pdf",
+    "Final-Policy-Doc_New-Jeevan-Anand.pdf",
+    "Insurance Regulatory and Development Authority of India (Health Insurance) Regulations,2016.pdf",
+    "irda-protection-of-policyholders-interests-regulations.pdf",
+    "MD18KYCF6E92C82E1E1419D87323E3869BC9F13.pdf",
+    "philippines-insurance-commission-circular-letter-2022-04.pdf",
+    "Star Comprehensive Insurance Policy.pdf"
+  ],
+  "schema_version": "1.0",
+  "last_updated": "2026-09-22"
+}

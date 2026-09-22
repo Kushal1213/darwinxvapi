@@ -1,0 +1,101 @@
+LIFE INSURANCE IN THE PHILIPPINES — COMPLETE GUIDE
+(For Agent Reference — English/Tagalog)
+
+REGULATORY FRAMEWORK:
+- Regulated by: Insurance Commission (IC) of the Philippines
+- Key Law: Republic Act 10607 (Amended Insurance Code)
+- Bancassurance regulated jointly by BSP (Bangko Sentral ng Pilipinas) and IC
+
+TYPES OF LIFE INSURANCE PRODUCTS:
+
+1. TERM INSURANCE (Term Proteksyon)
+   - Pure protection, no cash value
+   - Most affordable premiums
+   - Coverage period: 5, 10, 15, 20, 25, 30 years
+   - Best for: Young families, income replacement
+   - Example: PHP 10 million coverage for PHP 8,000-15,000/year for 30-year-old
+
+2. WHOLE LIFE INSURANCE (Panghabambuhay na Seguro)
+   - Coverage for entire life
+   - Builds cash value over time
+   - Dividends may be earned
+   - Premium: Higher than term but for lifetime coverage
+
+3. ENDOWMENT PLAN (Savings + Insurance)
+   - Insurance + savings/investment component
+   - Pays maturity benefit if insured survives the term
+   - Popular for education planning
+
+4. VARIABLE UNIT-LINKED (VUL)
+   - Insurance + investment in one product
+   - Fund value depends on market performance
+   - Most popular product in bancassurance channel
+
+5. BANCASSURANCE (Bank + Insurance)
+   - Insurance products sold through bank branches
+   - Customer's bank relationship is leveraged
+   - Often tied to bank deposits or loans
+
+KEY INSURANCE TERMS (English / Filipino):
+
+PREMIUM / PREMIUM:
+The periodic payment to keep the policy active.
+"Ang premium po ay ang regular na bayad para manatiling aktibo ang inyong policy."
+
+BENEFICIARY / BENEPISYARYO:
+Person who receives the death benefit.
+"Ang benepisyaryo po ang makakatanggap ng halaga ng insurance kung sakaling pumanaw ang insured."
+
+RIDER / DAGDAG NA PROTEKSYON:
+Additional coverage attached to base policy.
+"Pwede pong mag-add ng rider para sa critical illness o accidental death."
+
+COVERAGE / HALAGA NG PROTEKSYON:
+The total amount of insurance protection.
+"Ang inyong coverage po ay 5 milyong piso."
+
+SUM ASSURED / GUARANTEED NA HALAGA:
+The guaranteed death benefit amount.
+
+POLICY LAPSE / PAG-EXPIRE NG POLICY:
+When coverage ends due to non-payment of premium.
+"Kung hindi mabayaran ang premium pagkatapos ng grace period, mag-e-expire or mala-lapse ang policy."
+
+GRACE PERIOD / PALUGIT NA PANAHON:
+30-31 days after premium due date during which coverage continues.
+
+FREE LOOK PERIOD (Philippines):
+15 days to review and cancel for full refund.
+"Mayroon pong 15 araw na free look period para suriin ang policy. Kung hindi kayo satisfied, ibabalik namin ang inyong bayad."
+
+BANCASSURANCE FLOW:
+1. Bank RM / teller identifies customer with savings/deposits
+2. Refers to bancassurance specialist or calls BSP-approved script
+3. Needs assessment conducted
+4. Product recommendation made
+5. Application processed
+6. Policy delivered within 15 business days
+
+QUALIFICATION QUESTIONS (Natural Taglish):
+- "Ilang taon na po kayo?" (Age for premium calculation)
+- "May dependents po ba kayo — asawa, anak?" (Beneficiary identification)
+- "Mayroon na po ba kayong existing life insurance?" (Needs gap analysis)
+- "Magkano po ang inyong monthly income?" (Coverage recommendation)
+- "Ano po ang inyong pinakamalaking financial concern?" (Needs based selling)
+
+COMMON OBJECTIONS AND RESPONSES:
+
+Objection: "Mahal naman ang premium / The premium is expensive"
+Response: "Naiintindihan ko po. Pero isipin po natin — ang [amount] kada buwan ay hindi masyadong malaki kung ikukumpara sa halaga ng proteksyon para sa inyong pamilya. Ang PHP 5 million na coverage ay katumbas ng [number] taon ng inyong sahod. Kung may mangyari sa inyo, siguradong may mapagkakaaraasahan ang pamilya ninyo."
+
+Objection: "I'll think about it / Iisipin ko muna"
+Response: "Of course po, take all the time you need. Pero pwede ko po bang ipadala ang mga detalye sa inyong email para may reference kayo? At kailan po ba kayo available para sa follow-up call?"
+
+Objection: "Hindi ko kailangan — bata pa ako / I don't need it — I'm young"
+Response: "Exactly po — dahil bata ka pa, mas mababa ang inyong premium ngayon. Habang tumatanda, mas mahal na. Ang mga nasa twenties at thirties ang pinaka-ideal na mag-avail ng insurance — healthy pa, mababang premium, matagal na proteksyon."
+
+COMPLIANCE REQUIREMENTS (BSP/IC):
+- Must disclose: product type, premium, coverage, exclusions, free-look period
+- Recorded consent required before policy issuance
+- Never misrepresent product as savings account or bank deposit
+- Always explain that VUL returns are not guaranteed
