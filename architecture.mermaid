@@ -34,7 +34,7 @@ flowchart TB
         LOCAL["local_retriever.py\n(offline TF-IDF fallback)"]
     end
 
-    subgraph INSIGHTS["FastAPI Real-Time Insights :8003 (Q4)"]
+    subgraph INSIGHTS["FastAPI Real-Time Insights :8003"]
         DETECTOR["Signal Detectors\n(5 types, rule-based)"]
         CONTROLLER["Nudge Controller\n(threshold + cooldown + priority)"]
         WS["WebSocket /stream/{scenario}"]
@@ -42,10 +42,10 @@ flowchart TB
     end
 
     subgraph DASHBOARD["React Dashboard :3000"]
-        VOICE_STUDIO["Voice Studio\n(Q1 live call UI)"]
-        INSIGHTS_PAGE["Mission Control\n(Q4 live nudges)"]
-        KB_HUB["Knowledge Hub\n(Q2 retrieval explorer)"]
-        LANG_MATRIX["Language Matrix\n(Q3 bot configs)"]
+        VOICE_STUDIO["Voice Studio\nLive call UI"]
+        INSIGHTS_PAGE["Mission Control\nLive nudges"]
+        KB_HUB["Knowledge Hub\nRetrieval explorer"]
+        LANG_MATRIX["Language Matrix\nLocalized agent configs"]
     end
 
     PHONE -->|audio stream| ASR

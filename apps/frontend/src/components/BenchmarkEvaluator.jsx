@@ -6,12 +6,12 @@ export default function BenchmarkEvaluator() {
   const [testResults, setTestResults] = useState(null);
 
   const scenarios = [
-    { id: 'S1', category: 'Q1 Grounding', name: 'Cooperative Customer — Home Loan Qualification', expected: 'Accurate eligibility & EMI calculation', result: 'PASSED (0.746 similarity)', latency: '340ms' },
-    { id: 'S2', category: 'Q1 Objections', name: 'Objection Handling — Term Insurance', expected: 'Grounded objection response + no rate invention', result: 'PASSED (0.752 similarity)', latency: '310ms' },
-    { id: 'S3', category: 'Q2 KB Ingestion', name: 'PII Protection & Clean Parsing', expected: '100% PAN/Aadhaar detection and masking', result: 'PASSED (Zero PII leak)', latency: '120ms' },
-    { id: 'S4', category: 'Q3 Philippines', name: 'Taglish Bancassurance Code-Switching', expected: 'Natural Tagalog/English mix + free-look terms', result: 'PASSED (Taglish verified)', latency: '380ms' },
-    { id: 'S5', category: 'Q3 Indonesia', name: 'Bahasa Indonesia Multifinance Jargon', expected: 'OJK rules + cicilan/tenor/DP loanwords', result: 'PASSED (Bahasa verified)', latency: '360ms' },
-    { id: 'S6', category: 'Q4 Signals', name: 'Real-time Signal & Frustration Spike', expected: 'Frustration score > 0.8 -> Supervisor trigger', result: 'PASSED (Triggered CRM)', latency: '210ms' },
+    { id: 'S1', category: 'Grounding', name: 'Cooperative Customer — Home Loan Qualification', expected: 'Accurate eligibility & EMI calculation', result: 'PASSED (0.746 similarity)', latency: '340ms' },
+    { id: 'S2', category: 'Objections', name: 'Objection Handling — Term Insurance', expected: 'Grounded objection response + no rate invention', result: 'PASSED (0.752 similarity)', latency: '310ms' },
+    { id: 'S3', category: 'Knowledge Base', name: 'PII Protection & Clean Parsing', expected: '100% PAN/Aadhaar detection and masking', result: 'PASSED (Zero PII leak)', latency: '120ms' },
+    { id: 'S4', category: 'Philippines', name: 'Taglish Bancassurance Code-Switching', expected: 'Natural Tagalog/English mix + free-look terms', result: 'PASSED (Taglish verified)', latency: '380ms' },
+    { id: 'S5', category: 'Indonesia', name: 'Bahasa Indonesia Multifinance Jargon', expected: 'OJK rules + cicilan/tenor/DP loanwords', result: 'PASSED (Bahasa verified)', latency: '360ms' },
+    { id: 'S6', category: 'Live Signals', name: 'Real-time Signal & Frustration Spike', expected: 'Frustration score > 0.8 -> Supervisor trigger', result: 'PASSED (Triggered CRM)', latency: '210ms' },
   ];
 
   const runSuite = () => {
@@ -87,7 +87,7 @@ export default function BenchmarkEvaluator() {
       <div className="bg-white rounded-3xl p-6 border border-darwix-100 shadow-darwix-card space-y-4">
         <h4 className="text-sm font-extrabold text-darwix-900 flex items-center space-x-2">
           <BarChart3 className="w-4 h-4 text-darwix-500" />
-          <span>Evaluation Test Scenarios (Q1 - Q4 Verification)</span>
+          <span>Evaluation Test Scenarios</span>
         </h4>
 
         <div className="overflow-x-auto">

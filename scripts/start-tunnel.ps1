@@ -1,10 +1,10 @@
 # =====================================================================
-# Darwix Voice Intelligence Suite - Dev Tunnel Script
+# Veyra - Development Tunnel Script
 # Sets up an ngrok tunnel so Vapi can reach your local Express gateway
 # =====================================================================
 
 Write-Host ""
-Write-Host "  🎙️  Darwix Voice Intelligence Suite — ngrok Tunnel" -ForegroundColor Cyan
+Write-Host "  Veyra - ngrok Tunnel" -ForegroundColor Cyan
 Write-Host "  =====================================================" -ForegroundColor DarkGray
 
 # ── Check ngrok is installed ──────────────────────────────────────────

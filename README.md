@@ -178,7 +178,6 @@ knowledge-base/
   embeddings/            Local index and metadata
 scripts/                 Cross-platform local startup helpers
 shared/                  Shared schemas and utilities
-evaluation/              Reproducible retrieval and signal checks
 ```
 
 ## Verification

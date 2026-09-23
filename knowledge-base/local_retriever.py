@@ -1,5 +1,5 @@
 """
-local_retriever.py — Offline TF-IDF retrieval engine for the Darwix knowledge base.
+local_retriever.py - Offline TF-IDF retrieval engine for the Veyra knowledge base.
 
 WHY THIS EXISTS
 ----------------
@@ -14,17 +14,10 @@ results, this module is a small, dependency-light, fully offline retriever
   1. Actually parses every real file in knowledge-base/raw/
   2. Actually chunks it (heading-aware, ~120-220 word chunks with overlap)
   3. Actually indexes it and answers queries with a real similarity score
-  4. Is used to produce every number in evaluation/retrieval_tests.md —
-     nothing in that report is hand-typed.
-
-It is also imported by evaluation/build_call_transcripts.py and
-evaluation/run_q4_realtime.py so that every "grounded" answer or citation
-that appears anywhere in the evaluation/ folder was actually retrieved by
-code, not invented.
+  4. Returns auditable chunks, source names, and similarity scores.
 
 This is a fallback/verification path, not a replacement for the production
-Gemini-embedding pipeline in services/rag-service — see README.md
-"Environment Notes" for how the two relate.
+Gemini-embedding pipeline in services/rag-service.
 """
 
 from __future__ import annotations
@@ -138,9 +131,7 @@ def clean_word_ratio(text: str) -> float:
 def quality_check(stem: str, source_name: str, text: str) -> str | None:
     """Returns a human-readable reason string if this document should be
     EXCLUDED from the index as an extraction failure, else None. This is the
-    'handle extraction failures and flag obvious source errors' requirement
-    from Q2, applied for real against the actual files in knowledge-base/raw/
-    (see evaluation/data_quality_report.md for what this actually caught)."""
+    extraction-quality gate applied to files in knowledge-base/raw/."""
     words = text.split()
     if len(words) < 30:
         return (f"only {len(words)} words extracted — looks like a JS-rendered single-page "

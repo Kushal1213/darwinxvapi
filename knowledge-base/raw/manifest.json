@@ -202,7 +202,7 @@
       "pii": false
     }
   ],
-  "note": "9 PDF entries referenced in the original manifest were not present on disk (they were never committed to the repo) and have been removed from this manifest so it matches what is actually indexed. See evaluation/known_limitations.md.",
+  "note": "Nine PDF entries referenced in the original manifest were not present on disk and were removed so this manifest matches the indexed source set.",
   "removed_missing_files": [
     "36102.pdf",
     "c688.pdf",
