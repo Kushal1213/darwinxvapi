@@ -1,72 +1,62 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Zap, AlertTriangle, ShieldCheck, CheckCircle2, Flame, TrendingUp, UserCheck, ArrowRight, Clock, Activity, MessageSquare, RefreshCw } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Zap, AlertTriangle, CheckCircle2, Flame, TrendingUp, Activity, MessageSquare, RefreshCw } from 'lucide-react';
 import { io } from 'socket.io-client';
 
-export default function InsightsPage() {
-  const [selectedStream, setSelectedStream] = useState('live-active-01');
-  const [liveSession, setLiveSession] = useState({
-    id: 'live-active-01',
-    customer: 'Live Customer (Voice Session)',
-    agent: 'Aria (India Loans & Insurance)',
-    market: '🇮🇳 India Loans',
-    intent: 'Personal Loan Eligibility & Qualification',
-    sentiment: 'Positive',
-    sentimentScore: 0.88,
-    frustration: 0.12,
-    buyingSignal: true,
-    complianceRisk: false,
-    complianceRule: 'NONE',
-    timestamp: new Date().toLocaleTimeString(),
-    latency: '1,066ms',
-    query: 'What are the eligibility requirements for personal loans?',
-    answer: 'Minimum age: 21 years, Maximum age: 58 years (at loan maturity). Minimum monthly income: Rupees 25,000.',
-  });
+function formatTimestamp(timestamp) {
+  if (!timestamp) return 'Just now';
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? timestamp : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
 
+export default function InsightsPage() {
+  const [selectedStream, setSelectedStream] = useState(null);
+  const [liveCalls, setLiveCalls] = useState({});
   const [nudges, setNudges] = useState([]);
 
-  useEffect(() => {
-    // 1. Fetch live metrics from Gateway
-    fetch('http://localhost:3001/api/health')
-      .then(res => res.json())
-      .then(data => {
-        if (data?.services?.rag) {
-          setLiveSession(prev => ({
-            ...prev,
-            latency: '1,066ms',
-          }));
-        }
-      })
-      .catch(() => {});
+  const refreshLiveCalls = useCallback(async () => {
+    const response = await fetch('/api/voice/live');
+    if (!response.ok) throw new Error(`Live calls request failed (${response.status})`);
+    const data = await response.json();
+    const calls = Array.isArray(data.calls) ? data.calls : [];
+    const callsById = Object.fromEntries(calls.map((call) => [call.id, call]));
+    setLiveCalls(callsById);
+    setSelectedStream((selected) => (
+      selected && callsById[selected] ? selected : calls[0]?.id || null
+    ));
+  }, []);
 
-    // 2. Connect Socket.IO for live streaming turns AND real-time nudges (Q4)
-    const socket = io('http://localhost:3001', { transports: ['websocket', 'polling'] });
-    socket.on('transcript:update', (data) => {
-      if (data && data.text) {
-        const queryText = data.text.toLowerCase();
-        const isEscalation = queryText.includes('manager') || queryText.includes('escalate') || queryText.includes('complaint');
-        const isBuying = queryText.includes('loan') || queryText.includes('apply') || queryText.includes('eligible');
-        
-        setLiveSession(prev => ({
-          ...prev,
-          query: data.text,
-          timestamp: new Date().toLocaleTimeString(),
-          intent: queryText.includes('ltv') ? 'Loan Against Property LTV Inquiry' : queryText.includes('manager') ? 'Supervisor Escalation Request' : 'Personal Loan Inquiry',
-          frustration: isEscalation ? 0.82 : 0.15,
-          sentiment: isEscalation ? 'Negative' : 'Positive',
-          complianceRisk: isEscalation,
-          complianceRule: isEscalation ? 'SUPERVISOR_HUMAN_ESCALATION' : 'NONE',
-          buyingSignal: isBuying && !isEscalation,
-        }));
-      }
+  useEffect(() => {
+    // Load the server-owned snapshot first. Socket.IO only sends events that
+    // happen while this page is open, so relying on it alone lost calls created
+    // in Voice Studio before an operator switched to Mission Control.
+    refreshLiveCalls().catch(() => {});
+
+    const socket = io({ path: '/socket.io', transports: ['websocket', 'polling'] });
+
+    socket.on('connect', () => {
+      // Recover from gateway restarts and short network interruptions.
+      refreshLiveCalls().catch(() => {});
     });
 
-    // Q4: real-time nudge events forwarded from the Python insights engine
+    socket.on('insights:call:update', ({ call }) => {
+      if (!call?.id) return;
+      setLiveCalls((previous) => ({ ...previous, [call.id]: call }));
+      setSelectedStream((selected) => selected || call.id);
+    });
+
+    socket.on('insights:call:ended', ({ call_id: callId }) => {
+      if (!callId) return;
+      setLiveCalls((previous) => {
+        const { [callId]: _endedCall, ...remaining } = previous;
+        return remaining;
+      });
+      setSelectedStream((selected) => selected === callId ? null : selected);
+    });
+
     socket.on('nudge', (data) => {
-      const id = Date.now();
       setNudges(prev => [
         {
-          id,
+          id: `${data.call_id || 'nudge'}-${Date.now()}`,
           signal_type: data.type,
           priority: data.priority,
           text: data.text,
@@ -75,84 +65,49 @@ export default function InsightsPage() {
         },
         ...prev.slice(0, 9), // keep last 10 nudges
       ]);
-      // also update the frustration/compliance visual for the active call
-      if (data.type === 'rising_frustration' || data.type === 'human_escalation') {
-        setLiveSession(prev => ({
-          ...prev,
-          frustration: Math.min(1.0, prev.frustration + 0.2),
-          sentiment: 'Negative',
-          complianceRisk: data.type === 'human_escalation',
-          complianceRule: data.type === 'human_escalation' ? 'SUPERVISOR_ESCALATION_REQUESTED' : prev.complianceRule,
-        }));
-      }
-      if (data.type === 'compliance_gap') {
-        setLiveSession(prev => ({ ...prev, complianceRisk: true, complianceRule: 'DISCLOSURE_NOT_GIVEN' }));
-      }
+
+      // Give the operator immediate visual feedback; the following server
+      // snapshot is still authoritative and will reconcile this state.
+      if (!data.call_id) return;
+      setLiveCalls((previous) => {
+        const call = previous[data.call_id];
+        if (!call) return previous;
+        const isEscalation = data.type === 'human_escalation';
+        const isFrustration = data.type === 'rising_frustration';
+        const isCompliance = data.type === 'compliance_gap';
+        return {
+          ...previous,
+          [data.call_id]: {
+            ...call,
+            frustration: isFrustration || isEscalation ? Math.max(call.frustration || 0, 0.5) : call.frustration,
+            sentiment: isFrustration || isEscalation ? 'Negative' : call.sentiment,
+            complianceRisk: isEscalation || isCompliance || call.complianceRisk,
+            complianceRule: isEscalation ? 'SUPERVISOR_ESCALATION_REQUESTED' : isCompliance ? 'DISCLOSURE_NOT_GIVEN' : call.complianceRule,
+          },
+        };
+      });
     });
 
     return () => socket.disconnect();
-  }, []);
+  }, [refreshLiveCalls]);
 
-  // Real-Time Monitored Call Streams across Regional BFSI Operations
-  const activeStreams = [
-    {
-      ...liveSession,
-      timestamp: liveSession.timestamp || 'Just now',
-    },
-    {
-      id: 'call-102',
-      customer: 'Maria Santos',
-      agent: 'Maria (Taglish Agent)',
-      market: '🇵🇭 Philippines',
-      intent: '2M Life Insurance Premium & Free-Look Period',
-      sentiment: 'Positive',
-      sentimentScore: 0.94,
-      frustration: 0.05,
-      buyingSignal: true,
-      complianceRisk: false,
-      complianceRule: 'NONE',
-      timestamp: '2m ago',
-      latency: '325ms',
-      query: 'Magkano ang monthly premium for 2 Million life insurance policy at may free look period ba?',
-      answer: 'May 15-day free look period po tayo. Ang monthly premium ay humigit-kumulang PHP 1,500 depende sa edad at medical history.',
-    },
-    {
-      id: 'call-103',
-      customer: 'Budi Santoso',
-      agent: 'Dewi (Bahasa Agent)',
-      market: '🇮🇩 Indonesia',
-      intent: 'Motorcycle Tenor & DP 20% Requirement',
-      sentiment: 'Neutral',
-      sentimentScore: 0.65,
-      frustration: 0.28,
-      buyingSignal: false,
-      complianceRisk: false,
-      complianceRule: 'NONE',
-      timestamp: '5m ago',
-      latency: '350ms',
-      query: 'Berapa persen DP minimal untuk kredit motor Honda Beat dan berapa lama tenor maksimalnya?',
-      answer: 'DP minimal adalah 20% dari harga OTR, dengan pilihan tenor angsuran mulai dari 12 hingga 36 bulan.',
-    },
-    {
-      id: 'call-104',
-      customer: 'Vikram Singh',
-      agent: 'Priya (India Insurance)',
-      market: '🇮🇳 India Insurance',
-      intent: 'Delayed Claim Reimbursement Escalation',
-      sentiment: 'Negative',
-      sentimentScore: 0.22,
-      frustration: 0.78,
-      buyingSignal: false,
-      complianceRisk: true,
-      complianceRule: 'UNSETTLED_CLAIM_ESCALATION_IRDAI',
-      timestamp: '8m ago',
-      latency: '330ms',
-      query: 'I submitted my hospital claim documents 3 weeks ago and no one has processed it yet! Connect me to your senior manager.',
-      answer: 'I sincerely apologize for the delay. I have raised an urgent escalation tag and connected your case directly to our senior claims supervisor.',
-    }
-  ];
-
-  const currentCall = activeStreams.find((s) => s.id === selectedStream) || activeStreams[0];
+  const activeStreams = Object.values(liveCalls)
+    .sort((left, right) => new Date(right.timestamp) - new Date(left.timestamp));
+  const currentCall = activeStreams.find((stream) => stream.id === selectedStream) || activeStreams[0] || {
+    id: null,
+    customer: 'Waiting for a live agent',
+    agent: '—',
+    market: 'Live data will appear here automatically',
+    intent: 'No active call streams',
+    sentiment: 'Neutral',
+    frustration: 0,
+    buyingSignal: false,
+    complianceRisk: false,
+    complianceRule: 'NONE',
+    latency: '—',
+    query: '',
+    answer: '',
+  };
 
   return (
     <div className="max-w-[1440px] mx-auto px-4 sm:px-6 pt-4 pb-16 space-y-5 animate-fadeIn">
@@ -169,8 +124,17 @@ export default function InsightsPage() {
         <div className="flex items-center space-x-3 text-xs font-mono">
           <span className="px-3 py-1 rounded-full dark:bg-[#151D30] bg-slate-100 text-[#22C55E] font-bold border dark:border-[rgba(255,255,255,0.06)] border-slate-200 flex items-center space-x-1.5">
             <Activity className="w-3.5 h-3.5" />
-            <span>4 Live Streams Monitored</span>
+            <span>{activeStreams.length} Live Stream{activeStreams.length === 1 ? '' : 's'} Monitored</span>
           </span>
+          <button
+            type="button"
+            onClick={() => refreshLiveCalls().catch(() => {})}
+            className="p-2 rounded-lg dark:bg-[#151D30] bg-slate-100 dark:text-slate-300 text-slate-500 hover:text-[#5B5FFF] transition-colors"
+            title="Refresh live calls"
+            aria-label="Refresh live calls"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
@@ -199,7 +163,7 @@ export default function InsightsPage() {
                     <span className="text-xs">{st.market.split(' ')[0]}</span>
                     <strong className="text-xs font-bold text-white">{st.customer}</strong>
                   </div>
-                  <span className="text-[10px] font-mono text-slate-400">{st.timestamp}</span>
+                  <span className="text-[10px] font-mono text-slate-400">{formatTimestamp(st.timestamp)}</span>
                 </div>
 
                 <p className="text-xs text-slate-300 font-medium line-clamp-1">{st.intent}</p>
@@ -224,6 +188,11 @@ export default function InsightsPage() {
                 </div>
               </div>
             ))}
+            {activeStreams.length === 0 && (
+              <div className="p-5 rounded-xl border border-dashed dark:border-slate-700 border-slate-300 text-center text-xs text-slate-400">
+                No active calls yet. Start a Voice Studio call and this list will update automatically.
+              </div>
+            )}
           </div>
         </div>
 
@@ -295,12 +264,12 @@ export default function InsightsPage() {
               <div className="space-y-1.5 text-xs">
                 <div className="p-2.5 rounded-lg bg-[#5B5FFF]/10 border border-[#5B5FFF]/20">
                   <span className="text-[10px] font-mono text-[#5B5FFF] font-bold block mb-0.5">CUSTOMER QUERY</span>
-                  <p className="text-white font-medium line-clamp-2">"{currentCall.query || 'What are the eligibility requirements for personal loans?'}"</p>
+                  <p className="text-white font-medium line-clamp-2">"{currentCall.query || 'Waiting for the customer transcript…'}"</p>
                 </div>
 
                 <div className="p-2.5 rounded-lg dark:bg-[#0F172A] bg-white border dark:border-[rgba(255,255,255,0.06)] border-slate-200">
                   <span className="text-[10px] font-mono text-[#22C55E] font-bold block mb-0.5">ARIA GROUNDED RESPONSE</span>
-                  <p className="text-slate-300 font-medium line-clamp-2">"{currentCall.answer || 'Minimum age: 21 years, Maximum age: 58 years (at loan maturity). Minimum monthly income: Rupees 25,000.'}"</p>
+                  <p className="text-slate-300 font-medium line-clamp-2">"{currentCall.answer || 'Waiting for the agent response…'}"</p>
                 </div>
               </div>
             </div>
@@ -319,124 +288,19 @@ export default function InsightsPage() {
             ) : (
               <div className="p-3 rounded-xl bg-[#22C55E]/10 border border-[#22C55E]/20 text-[#22C55E] flex items-center space-x-2 text-xs font-bold">
                 <CheckCircle2 className="w-4 h-4" />
-                <span>Zero Compliance Violations Detected</span>
+                <span>{currentCall.id ? 'Zero Compliance Violations Detected' : 'Waiting for live telemetry'}</span>
               </div>
             )}
 
-            {/* Interactive Telemetry Controls */}
+            {/* Snapshot refresh is useful after a gateway restart; normal updates arrive by Socket.IO. */}
             <div className="pt-1 flex flex-wrap gap-2">
               <button
-                onClick={async () => {
-                  // Run a real Q4 scenario against the Python nudge engine
-                  // Falls back gracefully if port 8003 isn't running
-                  try {
-                    const res = await fetch('http://localhost:8003/replay/rising_frustration', { method: 'POST' });
-                    const data = await res.json();
-                    const emitted = (data.events || []).filter(e => e.emitted);
-                    if (emitted.length > 0) {
-                      setNudges(prev => [
-                        ...emitted.map((e, i) => ({
-                          id: Date.now() + i,
-                          signal_type: e.signal_type,
-                          priority: e.priority,
-                          text: e.nudge_text,
-                          latency_ms: e.end_to_end_latency_ms_excl_asr,
-                          ts: new Date().toLocaleTimeString(),
-                        })),
-                        ...prev,
-                      ].slice(0, 10));
-                    }
-                    setLiveSession(prev => ({
-                      ...prev,
-                      query: 'I\'ve told you people three times already, this is a waste of time!',
-                      intent: 'Frustration — Escalation Request',
-                      frustration: 0.85,
-                      sentiment: 'Negative',
-                      complianceRisk: true,
-                      complianceRule: 'SUPERVISOR_HUMAN_ESCALATION',
-                      buyingSignal: false,
-                      timestamp: new Date().toLocaleTimeString(),
-                    }));
-                  } catch {
-                    // Port 8003 not running — update state only
-                    setLiveSession(prev => ({
-                      ...prev,
-                      query: 'Connect me to a manager right now',
-                      answer: 'I completely understand your concern. Transferring you to a senior supervisor immediately.',
-                      intent: 'Supervisor Escalation Request',
-                      frustration: 0.85,
-                      sentiment: 'Negative',
-                      complianceRisk: true,
-                      complianceRule: 'SUPERVISOR_HUMAN_ESCALATION',
-                      buyingSignal: false,
-                      timestamp: new Date().toLocaleTimeString(),
-                    }));
-                  }
-                }}
-                className="flex-1 py-2 px-3 rounded-lg bg-[#EF4444]/20 hover:bg-[#EF4444]/30 text-[#EF4444] font-bold text-xs border border-[#EF4444]/40 transition-all flex items-center justify-center space-x-1.5\"
-              >
-                <AlertTriangle className="w-3.5 h-3.5" />
-                <span>Simulate Escalation (Live Nudge)</span>
-              </button>
-
-              <button
-                onClick={async () => {
-                  try {
-                    const res = await fetch('http://localhost:8003/replay/missed_cross_sell', { method: 'POST' });
-                    const data = await res.json();
-                    const emitted = (data.events || []).filter(e => e.emitted);
-                    if (emitted.length > 0) {
-                      setNudges(prev => [
-                        ...emitted.map((e, i) => ({
-                          id: Date.now() + i,
-                          signal_type: e.signal_type,
-                          priority: e.priority,
-                          text: e.nudge_text,
-                          latency_ms: e.end_to_end_latency_ms_excl_asr,
-                          ts: new Date().toLocaleTimeString(),
-                        })),
-                        ...prev,
-                      ].slice(0, 10));
-                    }
-                    setLiveSession(prev => ({
-                      ...prev,
-                      query: 'What is the minimum LTV ratio for property loans?',
-                      answer: 'For Loan Against Property, the maximum LTV ratio is 70% of the property value.',
-                      intent: 'Loan Against Property LTV Inquiry',
-                      frustration: 0.10,
-                      sentiment: 'Positive',
-                      complianceRisk: false,
-                      complianceRule: 'NONE',
-                      buyingSignal: true,
-                      timestamp: new Date().toLocaleTimeString(),
-                    }));
-                  } catch {
-                    setLiveSession(prev => ({
-                      ...prev,
-                      query: 'What is the minimum LTV ratio for property loans?',
-                      answer: 'For Loan Against Property, the maximum LTV ratio is 70% of the property value with flexible tenure up to 15 years.',
-                      intent: 'Loan Against Property LTV Inquiry',
-                      frustration: 0.10,
-                      sentiment: 'Positive',
-                      complianceRisk: false,
-                      complianceRule: 'NONE',
-                      buyingSignal: true,
-                      timestamp: new Date().toLocaleTimeString(),
-                    }));
-                  }
-                }}
-                className="flex-1 py-2 px-3 rounded-lg bg-[#22C55E]/20 hover:bg-[#22C55E]/30 text-[#22C55E] font-bold text-xs border border-[#22C55E]/40 transition-all flex items-center justify-center space-x-1.5\"
-              >
-                <TrendingUp className="w-3.5 h-3.5" />
-                <span>Simulate Cross-Sell (Live Nudge)</span>
-              </button>
-
-              <button
-                onClick={() => alert(`Lead for ${currentCall.customer} successfully logged into Darwix CRM Pipeline!`)}
+                type="button"
+                onClick={() => refreshLiveCalls().catch(() => {})}
                 className="py-2 px-4 rounded-lg bg-[#5B5FFF] hover:bg-[#7C6CFF] text-white font-bold text-xs shadow-md transition-all flex items-center justify-center space-x-1.5"
               >
-                <UserCheck className="w-3.5 h-3.5" />
-                <span>Log CRM Lead</span>
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Refresh Live Calls</span>
               </button>
             </div>
 

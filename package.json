@@ -1,20 +1,27 @@
 {
-  "name": "darwix-voice-intelligence-suite",
+  "name": "veyra-voice-intelligence-suite",
   "version": "1.0.0",
-  "description": "Darwix AI Engineer Assessment — Knowledge-Grounded Voice Agent Platform",
+  "description": "Veyra — AI agents that understand every customer conversation.",
   "private": true,
   "workspaces": [
     "apps/frontend",
     "apps/api-gateway"
   ],
   "scripts": {
+    "dev": "node scripts/start-stack.mjs",
     "dev:gateway": "cd apps/api-gateway && npm run dev",
     "dev:frontend": "cd apps/frontend && npm run dev",
-    "dev:rag": "cd services/rag-service && uvicorn main:app --reload --port 8001",
-    "dev:ingestion": "cd services/ingestion-service && uvicorn main:app --reload --port 8002",
-    "dev:realtime": "cd services/realtime-ai && uvicorn main:app --reload --port 8003"
+    "dev:rag": "node scripts/start-rag.mjs",
+    "dev:ingestion": "node scripts/start-python-service.mjs services/ingestion-service INGESTION_SERVICE_URL http://localhost:8002",
+    "dev:realtime": "node scripts/start-python-service.mjs services/realtime-insights REALTIME_AI_URL http://localhost:8003 api:app"
   },
-  "keywords": ["ai", "voice-agent", "rag", "bfsi", "nlp"],
-  "author": "Darwix Assessment",
+  "keywords": [
+    "ai",
+    "voice-agent",
+    "rag",
+    "bfsi",
+    "nlp"
+  ],
+  "author": "Veyra",
   "license": "MIT"
 }

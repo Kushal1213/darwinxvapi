@@ -30,14 +30,28 @@ from __future__ import annotations
 import asyncio
 import time
 
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, HTTPException, WebSocket
+from pydantic import BaseModel, Field
 from nudge_engine import Chunk, NudgeController, detect_signals as detect_signals_impl
 from test_calls import ALL_SCENARIOS
 
-app = FastAPI(title="Darwix Real-Time Insights (Q4)")
+app = FastAPI(title="Veyra Real-Time Insights")
 
 TIME_SCALE = 0.15
-CALL_STATES = {}  # call_id -> {controller, disclosures_seen, frustration_history}
+CALL_STATES = {}  # call_id -> {controller, disclosures_seen, frustration_history, started_at}
+
+
+class DetectSignalsRequest(BaseModel):
+    """A final ASR segment received from the gateway.
+
+    Keeping this as an explicit JSON body is important: FastAPI otherwise treats
+    three scalar arguments as query parameters, which made the gateway's JSON
+    POSTs fail with a 422 and silently disabled live nudges.
+    """
+
+    call_id: str = Field(min_length=1, max_length=128)
+    speaker: str = Field(min_length=1, max_length=32)
+    text: str = Field(min_length=1, max_length=8_000)
 
 
 @app.get("/health")
@@ -51,7 +65,7 @@ def scenarios():
 
 
 @app.post("/detect-signals")
-def detect_signals(call_id: str, speaker: str, text: str):
+def detect_signals(body: DetectSignalsRequest):
     """Inline signal detection for a single transcript chunk.
     This is called from the Node.js gateway when live transcripts arrive.
     
@@ -63,24 +77,35 @@ def detect_signals(call_id: str, speaker: str, text: str):
     Returns:
         {"nudges": [{"signal_type": "...", "priority": "...", "text": "...", ...}]}
     """
-    chunk = Chunk(speaker=speaker.lower(), text=text, call_seconds=0.0)
-    
+    call_id = body.call_id
+    speaker = body.speaker.lower()
+    text = body.text.strip()
+    if speaker not in {"agent", "assistant", "customer", "user"}:
+        raise HTTPException(422, "speaker must be agent, assistant, customer, or user")
+
+    # The detector is written around `agent` and `customer`; normalize browser
+    # and Vapi role names at the boundary.
+    normalized_speaker = "customer" if speaker in {"customer", "user"} else "agent"
+
     # Initialize per-call state if not present (in production, use Redis/Memcached)
     if call_id not in CALL_STATES:
         CALL_STATES[call_id] = {
             'controller': NudgeController(),
             'disclosures_seen': set(),
             'frustration_history': [],
+            'started_at': time.perf_counter(),
         }
-    
+
     state = CALL_STATES[call_id]
+    call_seconds = time.perf_counter() - state['started_at']
+    chunk = Chunk(speaker=normalized_speaker, text=text, call_seconds=call_seconds)
     t0 = time.perf_counter()
     signals = detect_signals_impl(chunk, 0, state['disclosures_seen'], state['frustration_history'])
     detect_ms = (time.perf_counter() - t0) * 1000
     
     nudges = []
     for sig in signals:
-        nudge = state['controller'].process(sig, 0.0, detect_ms)
+        nudge = state['controller'].process(sig, call_seconds, detect_ms)
         if nudge.emitted:
             nudges.append({
                 "signal_type": nudge.signal.type.value,
@@ -91,6 +116,13 @@ def detect_signals(call_id: str, speaker: str, text: str):
             })
     
     return {"call_id": call_id, "nudges": nudges}
+
+
+@app.delete("/calls/{call_id}")
+def close_call(call_id: str):
+    """Discard transient per-call detector state after a call ends."""
+    CALL_STATES.pop(call_id, None)
+    return {"status": "closed", "call_id": call_id}
 
 
 @app.post("/replay/{scenario_name}")

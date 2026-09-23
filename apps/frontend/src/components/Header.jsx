@@ -17,7 +17,7 @@ export default function Header({ activeTab, setActiveTab }) {
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center space-x-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-            <span className="font-extrabold text-emerald-400 tracking-wider">DARWIX VOICE SLM ENGINE</span>
+            <span className="font-extrabold text-emerald-400 tracking-wider">VEYRA VOICE SLM ENGINE</span>
             <span className="text-slate-400 hidden sm:inline">| FAISS 3072d + Gemini 2.5 Flash</span>
           </div>
 
@@ -48,7 +48,7 @@ export default function Header({ activeTab, setActiveTab }) {
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <span className="text-lg font-extrabold tracking-tight text-white">Darwix <span className="text-darwix-400">AI</span></span>
+                <span className="text-lg font-extrabold tracking-tight text-white">Veyra</span>
                 <span className="px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-widest rounded-md bg-darwix-500/20 text-darwix-300 border border-darwix-500/30">
                   Voice Agent Studio
                 </span>

@@ -44,7 +44,7 @@ export default function AppLayout({ activeTab, setActiveTab, children }) {
             <span className={`text-xl font-bold tracking-tight ${
               theme === 'dark' ? 'text-white' : 'text-[#0F172A]'
             }`}>
-              Darwix <span className="text-white font-extrabold">AI</span>
+              Veyra
             </span>
           </div>
 
@@ -84,7 +84,7 @@ export default function AppLayout({ activeTab, setActiveTab, children }) {
             </a>
 
             <a 
-              href="https://github.com" 
+              href="https://github.com/Kushal1213"
               target="_blank" 
               rel="noreferrer"
               className={`hidden sm:inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
@@ -155,9 +155,9 @@ export default function AppLayout({ activeTab, setActiveTab, children }) {
       }`}>
         <div className="max-w-[1440px] mx-auto space-y-6">
           <div className="space-y-2">
-            <h3 className="text-xl font-bold text-white tracking-tight">Darwix AI</h3>
+            <h3 className="text-xl font-bold text-white tracking-tight">Veyra</h3>
             <p className="text-sm text-slate-400">
-              © 2024 Darwix AI. Professional Grounded AI Retrieval Systems.
+              © 2024 Veyra. AI agents that understand every customer conversation.
             </p>
           </div>
 
@@ -175,4 +175,3 @@ export default function AppLayout({ activeTab, setActiveTab, children }) {
     </div>
   );
 }
-

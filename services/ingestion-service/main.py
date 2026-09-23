@@ -1,5 +1,5 @@
 """
-Darwix Ingestion Service
+Veyra Ingestion Service
 Handles: document loading → cleaning → chunking → Google embedding → FAISS indexing
 
 Embedding: Google text-embedding-004 (768-dim, via API — no local model needed)
@@ -24,7 +24,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-import fitz          # PyMuPDF — PDF text extraction
+# import fitz          # PyMuPDF — PDF text extraction (temporarily disabled due to dependency issue)
+from pypdf import PdfReader  # Alternative PDF reader
 from bs4 import BeautifulSoup
 import requests as req_lib
 
@@ -55,7 +56,7 @@ RAW_DIR.mkdir(parents=True, exist_ok=True)
 faiss_index: Optional[faiss.IndexFlatIP] = None
 chunk_store: list[dict] = []
 
-app = FastAPI(title="Darwix Ingestion Service", version="1.0.0")
+app = FastAPI(title="Veyra Ingestion Service", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
@@ -154,7 +155,7 @@ async def ingest_url(body: URLIngestionRequest):
     start = time.time()
     try:
         resp = req_lib.get(body.url, timeout=15, headers={
-            "User-Agent": "Mozilla/5.0 (compatible; DarwixBot/1.0)"
+            "User-Agent": "Mozilla/5.0 (compatible; VeyraBot/1.0)"
         })
         resp.raise_for_status()
     except Exception as e:
@@ -239,9 +240,12 @@ def reset_index():
 
 def extract_pdf_text(content: bytes) -> str:
     parts = []
-    with fitz.open(stream=content, filetype="pdf") as doc:
-        for i, page in enumerate(doc):
-            parts.append(f"[PAGE {i+1}]\n{page.get_text('text')}")
+    import io
+    pdf_file = io.BytesIO(content)
+    reader = PdfReader(pdf_file)
+    for i, page in enumerate(reader.pages):
+        text = page.extract_text()
+        parts.append(f"[PAGE {i+1}]\n{text}")
     return "\n".join(parts)
 
 

@@ -37,7 +37,7 @@ export default function BenchmarkEvaluator() {
         <div>
           <div className="flex items-center space-x-2">
             <ShieldCheck className="w-6 h-6 text-darwix-500" />
-            <h3 className="text-lg font-extrabold text-darwix-900">Darwix AI Assessment Benchmark Suite</h3>
+            <h3 className="text-lg font-extrabold text-darwix-900">Veyra Assessment Benchmark Suite</h3>
           </div>
           <p className="text-xs text-slate-500 mt-1">
             Automated verification of Grounding Accuracy, Out-of-Scope Fallbacks, PII Protection, Code-Switching, and Signal Extraction.

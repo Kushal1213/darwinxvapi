@@ -56,14 +56,13 @@ export default function DashboardPage({ activeTab, setActiveTab }) {
         <div className="lg:col-span-7 space-y-8">
           <div className="space-y-4">
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-[1.1]">
-              Production-Ready AI <br />
-              Voice Systems. <br />
-              <span className="text-blue-500 inline-block mt-1">Grounded. Real-Time.</span> <br />
-              <span className="text-blue-500 inline-block">Enterprise-Grade.</span>
+              Veyra <br />
+              <span className="text-blue-500 inline-block mt-1">AI agents that understand</span> <br />
+              <span className="text-blue-500 inline-block">every customer conversation.</span>
             </h1>
             
             <p className="text-base sm:text-lg text-slate-400 max-w-xl leading-relaxed pt-2">
-              Deploy intelligent, latency-optimized voice agents that seamlessly connect to your enterprise data. Built for scale, security, and precision.
+              Turn calls, chats, and support moments into grounded answers, live signals, and next-best actions your teams can trust.
             </p>
           </div>
 
@@ -80,7 +79,7 @@ export default function DashboardPage({ activeTab, setActiveTab }) {
               Launch Dashboard
             </button>
             <a 
-              href="https://github.com" 
+              href="https://github.com/Kushal1213"
               target="_blank" 
               rel="noreferrer"
               className="px-6 py-3.5 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 text-white font-semibold text-sm transition-all active:scale-95"

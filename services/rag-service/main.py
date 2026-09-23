@@ -1,5 +1,5 @@
 """
-Darwix RAG Service (Ultra-Low Latency Edition v1.1)
+Veyra RAG Service (Ultra-Low Latency Edition v1.1)
 Target: Total RAG latency < 1.5 seconds
 
 Key Optimizations:
@@ -31,7 +31,13 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 # ── Logging Setup ─────────────────────────────────────────────
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] [req_id=%(request_id)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] [req_id=%(request_id)s] %(message)s",
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
 
 class RequestIDFilter(logging.Filter):
     def filter(self, record):
@@ -42,7 +48,7 @@ class RequestIDFilter(logging.Filter):
 logger = logging.getLogger("rag-service")
 logger.addFilter(RequestIDFilter())
 
-BASE_DIR = Path(__file__).resolve().parents[2]
+BASE_DIR = Path(__file__).resolve().parents[2].resolve()
 load_dotenv(BASE_DIR / ".env")
 
 # ── Configuration ─────────────────────────────────────────────
@@ -53,9 +59,18 @@ EMBEDDING_DIM    = 3072
 FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", str(BASE_DIR / "knowledge-base" / "embeddings" / "faiss_index"))
 PROMPTS_YAML_PATH = Path(__file__).parent / "config" / "prompts.yaml"
 
-INDEX_DIR     = Path(FAISS_INDEX_PATH)
-INDEX_FILE    = INDEX_DIR / "index.faiss"
-METADATA_FILE = INDEX_DIR / "metadata.json"
+INDEX_PATH    = Path(FAISS_INDEX_PATH)
+if not INDEX_PATH.is_absolute():
+    INDEX_PATH = BASE_DIR / INDEX_PATH
+
+if INDEX_PATH.is_dir():
+    INDEX_DIR = INDEX_PATH
+    INDEX_FILE = INDEX_DIR / "index.faiss"
+    METADATA_FILE = INDEX_DIR / "metadata.json"
+else:
+    INDEX_DIR = INDEX_PATH.parent
+    INDEX_FILE = INDEX_PATH
+    METADATA_FILE = INDEX_DIR / "metadata.json"
 
 # ── Global In-Memory State ─────────────────────────────────────
 faiss_index: Optional[faiss.IndexFlatIP] = None
@@ -65,8 +80,8 @@ embedding_cache_hits = 0
 
 # ── FastAPI App with OpenAPI Docs ──────────────────────────────
 app = FastAPI(
-    title="Darwix AI — Voice RAG Intelligence Engine",
-    description="Production high-performance RAG pipeline for Voice Agents. Target latency < 1.5s.",
+    title="Veyra — Voice RAG Intelligence Engine",
+    description="Production high-performance RAG pipeline for Veyra voice agents. Target latency < 1.5s.",
     version="1.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
@@ -95,7 +110,7 @@ def load_prompts():
     if PROMPTS_YAML_PATH.exists():
         with open(PROMPTS_YAML_PATH, "r", encoding="utf-8") as f:
             prompts_config = yaml.safe_load(f)
-        logger.info(f"✅ Loaded external prompts v{prompts_config.get('version', '1.0')}")
+        logger.info(f"Loaded external prompts v{prompts_config.get('version', '1.0')}")
     else:
         prompts_config = {
             "version": "1.0-fallback",
@@ -106,34 +121,49 @@ def load_prompts():
 
 def load_index():
     global faiss_index, chunk_store
+    logger.info(f"Loading index from {INDEX_FILE}")
+    logger.info(f"Loading metadata from {METADATA_FILE}")
+    logger.info(f"Index file exists: {INDEX_FILE.exists()}")
+    logger.info(f"Metadata file exists: {METADATA_FILE.exists()}")
+
     if INDEX_FILE.exists() and METADATA_FILE.exists():
         try:
-            idx = faiss.read_index(str(INDEX_FILE))
+            # Try loading with memory mapping to reduce memory usage
+            idx = faiss.read_index(str(INDEX_FILE), faiss.IO_FLAG_MMAP)
+            logger.info(f"Index dimensions: {idx.d}")
             if idx.d != EMBEDDING_DIM:
-                logger.warning(f"⚠️ Index dimension mismatch ({idx.d} vs {EMBEDDING_DIM})")
+                logger.warning(f"Index dimension mismatch ({idx.d} vs {EMBEDDING_DIM})")
                 faiss_index = faiss.IndexFlatIP(EMBEDDING_DIM)
                 chunk_store = []
             else:
                 faiss_index = idx
                 with open(METADATA_FILE, "r", encoding="utf-8") as f:
                     chunk_store = json.load(f)
-                logger.info(f"✅ Loaded FAISS index into RAM: {faiss_index.ntotal} vectors | {len(chunk_store)} chunks")
+                logger.info(f"Loaded FAISS index into RAM: {faiss_index.ntotal} vectors | {len(chunk_store)} chunks")
+                logger.info(f"Chunk store sample: {chunk_store[0] if chunk_store else 'empty'}")
+                logger.info(f"Global chunk_store after load: {len(chunk_store)}")
         except Exception as e:
             logger.error(f"Error loading FAISS index: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            # Fallback to empty index
+            faiss_index = faiss.IndexFlatIP(EMBEDDING_DIM)
+            chunk_store = []
     else:
         faiss_index = faiss.IndexFlatIP(EMBEDDING_DIM)
-        logger.warning(f"⚠️ FAISS index file not found at {INDEX_FILE}")
+        logger.warning(f"FAISS index file not found at {INDEX_FILE}, using empty index")
 
 
 @app.on_event("startup")
 async def startup():
     load_prompts()
+    logger.info(f"GEMINI_API_KEY configured: {bool(GEMINI_API_KEY)}")
     if GEMINI_API_KEY:
         genai.configure(api_key=GEMINI_API_KEY)
-        logger.info(f"✅ Gemini API configured | llm={GEMINI_MODEL} | embed={EMBEDDING_MODEL}")
+        logger.info(f"Gemini API configured | llm={GEMINI_MODEL} | embed={EMBEDDING_MODEL}")
     else:
-        logger.warning("⚠️ GEMINI_API_KEY missing")
-    
+        logger.warning("GEMINI_API_KEY missing")
+
     load_index()
 
 
@@ -161,8 +191,47 @@ def embed_query_fast(query: str) -> np.ndarray:
         embedding_cache_hits += 1
         return np.array(vec_tuple, dtype=np.float32).reshape(1, -1)
     except Exception as e:
-        logger.warning(f"Embedding API error ({e}), generating zero vector fallback")
-        return np.zeros((1, EMBEDDING_DIM), dtype=np.float32)
+        # A zero vector makes FAISS return arbitrary documents. Let the request
+        # handler select the deterministic lexical fallback instead.
+        logger.warning(f"Embedding API error ({e}), using lexical retrieval fallback")
+        return None
+
+
+def canonical_market(market: str) -> str:
+    """Map UI/Vapi market identifiers to the knowledge-base market values."""
+    value = (market or "").lower()
+    if value in {"ph-bancassurance", "ph", "philippines", "taglish"}:
+        return "philippines"
+    if value in {"id-finance", "id", "indonesia", "bahasa"}:
+        return "indonesia"
+    return "india"
+
+
+def lexical_candidates(query: str, market: str) -> list[dict]:
+    """Offline fallback when the embedding provider is unavailable.
+
+    It deliberately searches the already-loaded, versioned chunks so citations
+    remain identical to the normal FAISS path. This is much safer than searching
+    with a zero vector, whose results have no relationship to the question.
+    """
+    query_terms = set(re.findall(r"[a-z0-9]+", normalize_query(query)))
+    market_name = canonical_market(market)
+    ranked = []
+    for chunk in chunk_store:
+        text_terms = set(re.findall(r"[a-z0-9]+", chunk.get("content", "").lower()))
+        overlap = len(query_terms & text_terms)
+        if overlap:
+            score = overlap / max(1, len(query_terms))
+            if chunk.get("market") == market_name:
+                score += 0.15
+            ranked.append({**chunk, "_score": min(score, 1.0)})
+    return sorted(ranked, key=lambda item: item["_score"], reverse=True)
+
+
+def select_market_chunks(candidates: list[dict], market: str, top_k: int) -> list[dict]:
+    """Prefer a market's policy corpus without returning an empty response."""
+    preferred = [chunk for chunk in candidates if chunk.get("market") == canonical_market(market)]
+    return (preferred if len(preferred) >= top_k else candidates)[:top_k]
 
 
 # ── Data Models ───────────────────────────────────────────────
@@ -188,6 +257,14 @@ class RetrieveResponse(BaseModel):
 # ── Routes ────────────────────────────────────────────────────
 @app.get("/health", summary="Service Health & KB Index Status")
 def health():
+    # Use global keyword to ensure we're modifying the global variables
+    global chunk_store, faiss_index
+    # Force reload if empty - this handles uvicorn reload issues
+    if len(chunk_store) == 0 or (faiss_index is None or faiss_index.ntotal == 0):
+        logger.warning("Health check detected empty index, forcing reload...")
+        load_index()
+
+    logger.info(f"Health check - chunks: {len(chunk_store)}, vectors: {faiss_index.ntotal if faiss_index else 0}")
     return {
         "status": "ok",
         "service": "rag-service",
@@ -200,29 +277,53 @@ def health():
         "cache_hits": embedding_cache_hits,
     }
 
+@app.get("/test", summary="Simple test endpoint")
+def test():
+    logger.info("Test endpoint called")
+    return {"status": "ok", "message": "Test successful"}
+
 
 @app.post("/retrieve", response_model=RetrieveResponse, summary="Retrieve Grounded Answer (<1.5s target)")
 async def retrieve(req: RetrieveRequest, request: Request):
+    global faiss_index, chunk_store  # Ensure we're using the global variables
     t0 = time.time()
     req_id = getattr(request.state, "request_id", "sys")
 
-    if not GEMINI_API_KEY:
-        raise HTTPException(503, "GEMINI_API_KEY not configured")
+    logger.info(f"[{req_id}] Received retrieve request: query='{req.query}', top_k={req.top_k}")
+    logger.info(f"[{req_id}] Current state - chunks: {len(chunk_store)}, vectors: {faiss_index.ntotal if faiss_index else 0}")
 
-    if faiss_index is None or faiss_index.ntotal == 0:
+    # Force reload if index is empty (handles uvicorn reload issues)
+    if faiss_index is None or faiss_index.ntotal == 0 or len(chunk_store) == 0:
+        logger.warning(f"[{req_id}] FAISS index empty, forcing reload...")
         load_index()
+        logger.info(f"[{req_id}] After reload - chunks: {len(chunk_store)}, vectors: {faiss_index.ntotal if faiss_index else 0}")
+
+    if faiss_index is None or faiss_index.ntotal == 0 or not chunk_store:
+        # Avoid the FAISS k=0 failure and give callers a usable, explicit result.
+        logger.error(f"[{req_id}] Knowledge-base index is unavailable")
+        raise HTTPException(503, "Knowledge-base index is unavailable. Start the ingestion service or restore the FAISS index.")
 
     # Step 1: Vector Embedding & FAISS Search (< 150ms)
     t_retrieval_start = time.time()
-    query_vec = embed_query_fast(req.query)
-    
-    k = min(5, faiss_index.ntotal)
-    scores, indices = faiss_index.search(query_vec, k)
-
+    logger.info(f"[{req_id}] Starting retrieval for query: '{req.query}'")
+    query_vec = embed_query_fast(req.query) if GEMINI_API_KEY else None
     candidates = []
-    for score, idx in zip(scores[0], indices[0]):
-        if idx != -1 and idx < len(chunk_store):
-            candidates.append({**chunk_store[idx], "_score": float(score)})
+    if query_vec is not None:
+        # Pull extra candidates before market filtering so a regional agent can
+        # still receive its own policy documents.
+        k = min(max(req.top_k * 8, 16), faiss_index.ntotal)
+        try:
+            scores, indices = faiss_index.search(query_vec, k)
+            for score, idx in zip(scores[0], indices[0]):
+                if idx != -1 and idx < len(chunk_store):
+                    candidates.append({**chunk_store[idx], "_score": float(score)})
+        except Exception as e:
+            logger.warning(f"[{req_id}] FAISS search failed ({e}), using lexical retrieval fallback")
+            candidates = lexical_candidates(req.query, req.market)
+    else:
+        candidates = lexical_candidates(req.query, req.market)
+
+    logger.info(f"[{req_id}] Found {len(candidates)} candidates")
 
     retrieval_ms = int((time.time() - t_retrieval_start) * 1000)
 
@@ -239,16 +340,21 @@ async def retrieve(req: RetrieveRequest, request: Request):
             kb_version=prompts_config.get("version", "1.1"),
         )
 
-    # Select top-2 chunks directly to save LLM context tokens & latency
-    top_chunks = candidates[:req.top_k]
+    # Select top chunks directly to save LLM context tokens & latency.
+    top_chunks = select_market_chunks(candidates, req.market, req.top_k)
+    logger.info(f"[{req_id}] Selected {len(top_chunks)} top chunks for LLM")
 
-    # Step 2: LLM Answer Generation (Target 700 - 1000ms)
+    # Step 2: Use direct knowledge synthesizer for faster response
     t_llm_start = time.time()
-    answer = generate_answer_fast(
-        query=req.query,
-        chunks=top_chunks,
-        language=req.language,
-    )
+    try:
+        logger.info(f"[{req_id}] Using direct knowledge synthesizer for query: '{req.query}'")
+        answer = synthesize_direct_knowledge_answer(req.query, top_chunks)
+        logger.info(f"[{req_id}] Generated answer: {answer[:100]}")
+    except Exception as e:
+        logger.error(f"[{req_id}] Answer generation error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        answer = "I apologize, but I encountered an error processing your request. Please try again or speak with a human agent."
     llm_ms = int((time.time() - t_llm_start) * 1000)
 
     total_ms = int((time.time() - t0) * 1000)
@@ -261,6 +367,7 @@ async def retrieve(req: RetrieveRequest, request: Request):
             "chunk_id": c.get("chunk_id", "chk-01"),
             "score": round(c["_score"], 4),
             "category": c.get("category", "policy"),
+            "excerpt": clean_for_speech(c.get("content", ""))[:280],
         }
         for c in top_chunks
     ]
@@ -343,6 +450,31 @@ def synthesize_direct_knowledge_answer(query: str, chunks: list[dict]) -> str:
 
     query_lower = normalize_query(query)
 
+    # Document questions need the bullet items, not just the section headings.
+    if any(k in query_lower for k in ["document", "documents", "kyc", "paperwork"]):
+        doc_lines = []
+        in_documents_section = False
+        for c in chunks:
+            for raw_line in c["content"].splitlines():
+                line = raw_line.strip()
+                normalized = line.lower()
+                if normalized.startswith("documents required"):
+                    in_documents_section = True
+                    continue
+                if in_documents_section and not line:
+                    in_documents_section = False
+                    continue
+                if in_documents_section and line.startswith("-"):
+                    item = line.lstrip("-*#• ").strip()
+                    if item:
+                        doc_lines.append(item)
+                if len(doc_lines) >= 4:
+                    break
+            if len(doc_lines) >= 4:
+                break
+        if doc_lines:
+            return clean_for_speech("For a personal loan, you will need " + "; ".join(doc_lines[:4]) + ".")
+
     # 1. Human Escalation / Manager Request
     if any(k in query_lower for k in ["manager", "supervisor", "escalate", "escalation", "human", "complaint"]):
         return "I completely understand your concern. I am transferring your request to a senior supervisor immediately so they can assist you right away."
@@ -361,12 +493,19 @@ def synthesize_direct_knowledge_answer(query: str, chunks: list[dict]) -> str:
 
     # 5. Extract top relevant facts matching query keywords
     keywords = [w for w in query_lower.split() if len(w) > 3 and w not in ["what", "where", "which", "how", "this", "that", "with", "from"]]
-    
+
     matched_lines = []
     for c in chunks:
         for l in c["content"].splitlines():
             l_str = l.lstrip("-*#• ").strip()
-            if not l_str or l_str.isupper() or l_str.startswith("Q:") or l_str.startswith("A:") or l_str.startswith("ESCALATION"):
+            if (
+                not l_str
+                or l_str.endswith(":")
+                or l_str.isupper()
+                or l_str.startswith("Q:")
+                or l_str.startswith("A:")
+                or l_str.startswith("ESCALATION")
+            ):
                 continue
             if any(k in l_str.lower() for k in keywords):
                 matched_lines.append(l_str)
@@ -383,6 +522,8 @@ def synthesize_direct_knowledge_answer(query: str, chunks: list[dict]) -> str:
 
 # ── Fast Gemini LLM Generator with Timeout & Fail-Safe ─────────────────
 def generate_answer_fast(query: str, chunks: list[dict], language: str = "en") -> str:
+    logger.info(f"Generating answer for query: '{query}' with {len(chunks)} chunks")
+
     context_str = "\n\n".join([f"Document ({c.get('source','KB')}):\n{c['content']}" for c in chunks])
 
     user_prompt = f"""Context:
@@ -392,6 +533,7 @@ Question: {query}
 Synthesize a direct 2-sentence conversational answer based on the context above:"""
 
     try:
+        logger.info(f"Calling Gemini model: {GEMINI_MODEL}")
         model = genai.GenerativeModel(GEMINI_MODEL)
         response = model.generate_content(
             user_prompt,
@@ -400,6 +542,7 @@ Synthesize a direct 2-sentence conversational answer based on the context above:
                 max_output_tokens=300,
             ),
         )
+        logger.info(f"Gemini response received: {response}")
 
         if response and hasattr(response, "candidates") and response.candidates:
             cand = response.candidates[0]
@@ -407,16 +550,19 @@ Synthesize a direct 2-sentence conversational answer based on the context above:
                 raw_text = "".join([p.text for p in cand.content.parts if hasattr(p, "text")]).strip()
                 cleaned = parse_voice_answer(raw_text)
                 if cleaned and len(cleaned) > 10:
+                    logger.info(f"Using Gemini answer: {cleaned[:100]}")
                     return cleaned
 
         if response and response.text:
             cleaned = parse_voice_answer(response.text)
             if cleaned and len(cleaned) > 10:
+                logger.info(f"Using Gemini text answer: {cleaned[:100]}")
                 return cleaned
     except Exception as e:
         logger.warning(f"LLM Generation failed ({e}) — switching to instant knowledge synthesizer")
+        import traceback
+        logger.warning(traceback.format_exc())
 
     # Fast & reliable fallback: synthesize directly from FAISS context (< 5ms)
+    logger.info("Using fallback knowledge synthesizer")
     return synthesize_direct_knowledge_answer(query, chunks)
-
-

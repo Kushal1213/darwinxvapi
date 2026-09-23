@@ -145,7 +145,7 @@ function MessageBubble({ msg }) {
     >
       <div className="flex items-center gap-2 mb-1 px-1">
         <span className="text-[11px] font-semibold dark:text-slate-500 text-slate-400">
-          {isUser ? 'Customer' : 'Aria (Darwix AI)'}
+          {isUser ? 'Customer' : msg.agentName || 'Veyra Agent'}
         </span>
         {msg.latency_ms && (
           <span className="text-[10px] font-mono text-emerald-500 flex items-center gap-0.5">
@@ -190,9 +190,9 @@ function MessageBubble({ msg }) {
                 {msg.sources[0]?.source || 'loan_qualification_rules.txt'}
               </span>
             </div>
-            {msg.sources[0]?.content && (
+            {(msg.sources[0]?.excerpt || msg.sources[0]?.content) && (
               <p className="text-[11px] font-mono dark:text-slate-400 text-slate-500 dark:bg-black/30 bg-slate-200 px-2 py-1.5 rounded-lg line-clamp-2">
-                "{msg.sources[0].content}"
+                "{msg.sources[0].excerpt || msg.sources[0].content}"
               </p>
             )}
           </div>
@@ -229,10 +229,32 @@ export default function VoiceStudioPage() {
   const isProcessingRef = useRef(false);
   const callStateRef = useRef('idle'); // mirror of callState for event handlers
   const isSpeakingRef = useRef(false);  // mirror of isSpeaking
+  const requestAbortRef = useRef(null);
+  const stageTimerRef = useRef(null);
+  const sessionIdRef = useRef(null);
   const socketRef = useRef(null);
   const chatEndRef = useRef(null);
 
   const current = MARKETS[market];
+
+  // Every browser turn uses the same server-owned call id. This keeps RAG
+  // history, socket updates, nudges, and escalation summaries tied together.
+  const ensureSession = useCallback(async () => {
+    if (sessionIdRef.current) return sessionIdRef.current;
+    const response = await fetch('/api/voice/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ market, language: MARKETS[market]?.lang || 'en-IN' }),
+    });
+    if (!response.ok) {
+      const detail = await response.json().catch(() => null);
+      throw new Error(detail?.message || detail?.error || 'Unable to create a voice session');
+    }
+    const data = await response.json();
+    sessionIdRef.current = data.call_id;
+    socketRef.current?.emit('monitor:call', { call_id: data.call_id });
+    return data.call_id;
+  }, [market]);
 
   // ── Scroll to bottom on new messages ──
   useEffect(() => {
@@ -241,7 +263,10 @@ export default function VoiceStudioPage() {
 
   // ── Socket.IO for server-side pipeline events ──
   useEffect(() => {
-    const socket = socketIO('http://localhost:3001', { transports: ['websocket'] });
+    // Connect through the current origin so Vite's /socket.io proxy and deployed
+    // same-origin installations both work. The old hard-coded :3001 target broke
+    // whenever PORT was configured differently.
+    const socket = socketIO({ path: '/socket.io', transports: ['websocket'] });
     socketRef.current = socket;
     socket.on('pipeline:latency', (data) => {
       setLatencies(prev => ({ ...prev, rag: data.rag_ms, gateway: data.total_ms - data.rag_ms }));
@@ -324,6 +349,8 @@ export default function VoiceStudioPage() {
         setError('🎤 Microphone access denied. Click the lock icon in the address bar → allow microphone.');
         setCallState('idle');
         callStateRef.current = 'idle';
+      } else if (event.error === 'network') {
+        setError('Voice recognition is unavailable. Check your internet connection or use Text Mode.');
       }
     };
 
@@ -331,6 +358,7 @@ export default function VoiceStudioPage() {
     return () => {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       try { recognition.abort(); } catch (_) {}
+      if (recognitionRef.current === recognition) recognitionRef.current = null;
     };
   }, [market]);
 
@@ -370,20 +398,47 @@ export default function VoiceStudioPage() {
     setVolumeLevel(0);
   }, []);
 
+  useEffect(() => () => {
+    callStateRef.current = 'idle';
+    requestAbortRef.current?.abort();
+    window.speechSynthesis?.cancel();
+    stopMicVisualization();
+  }, [stopMicVisualization]);
+
   // ── Core: send query to RAG, stream TTS back ──
   const processVoiceQuery = useCallback(async (query) => {
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    // Do not let the recognizer hear the browser's own TTS response. It will be
+    // restarted once this turn has finished.
+    try { recognitionRef.current?.stop(); } catch (_) {}
     setMessages(prev => [...prev, { id: `usr-${Date.now()}`, role: 'user', content: query, ts: new Date().toISOString() }]);
     setActiveStage('gateway');
-    setTimeout(() => setActiveStage('rag'), 100);
+    if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
+    stageTimerRef.current = setTimeout(() => setActiveStage('rag'), 100);
+
+    const controller = new AbortController();
+    requestAbortRef.current?.abort();
+    requestAbortRef.current = controller;
 
     try {
       const t0 = Date.now();
-      const res = await fetch('/api/rag/query', {
+      const callId = await ensureSession();
+      const res = await fetch('/api/voice/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, top_k: 2 }),
+        body: JSON.stringify({
+          query,
+          top_k: 2,
+          call_id: callId,
+          market,
+          language: MARKETS[market]?.lang || 'en-IN',
+        }),
+        signal: controller.signal,
       });
-      if (!res.ok) throw new Error(`RAG HTTP ${res.status}`);
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        throw new Error(detail?.message || detail?.error || `RAG HTTP ${res.status}`);
+      }
       const data = await res.json();
       const ragMs = Date.now() - t0;
 
@@ -398,6 +453,7 @@ export default function VoiceStudioPage() {
         content: answer,
         sources: data.sources || [],
         latency_ms: data.latency_ms || ragMs,
+        agentName: `${MARKETS[market]?.agent || 'Veyra'} (Veyra)`,
         ts: new Date().toISOString(),
       }]);
 
@@ -405,7 +461,10 @@ export default function VoiceStudioPage() {
       setActiveStage('tts');
       setIsSpeaking(true);
       isSpeakingRef.current = true;
-      speechSynthesis.cancel(); // clear any queued speech
+      if (!window.speechSynthesis || typeof window.SpeechSynthesisUtterance === 'undefined') {
+        throw new Error('Text-to-speech is not available in this browser. Use Chrome or Edge.');
+      }
+      window.speechSynthesis.cancel(); // clear any queued speech
 
       const cleanAnswerForSpeech = answer
         .replace(/\|/g, ', ')
@@ -414,14 +473,15 @@ export default function VoiceStudioPage() {
         .replace(/\s+/g, ' ')
         .trim();
 
-      const utterance = new SpeechSynthesisUtterance(cleanAnswerForSpeech);
+      const utterance = new window.SpeechSynthesisUtterance(cleanAnswerForSpeech);
       utterance.lang = MARKETS[market]?.lang || 'en-IN';
       utterance.rate = 1.05;
       utterance.pitch = 1.0;
       // Pick a clear female voice if available
-      const voices = speechSynthesis.getVoices();
-      const preferred = voices.find(v => v.lang.startsWith('en') && v.name.toLowerCase().includes('female'))
-        || voices.find(v => v.lang.startsWith('en') && !v.name.toLowerCase().includes('male'))
+      const voices = window.speechSynthesis.getVoices();
+      const languagePrefix = utterance.lang.split('-')[0].toLowerCase();
+      const preferred = voices.find(v => v.lang.toLowerCase().startsWith(languagePrefix) && v.name.toLowerCase().includes('female'))
+        || voices.find(v => v.lang.toLowerCase().startsWith(languagePrefix) && !v.name.toLowerCase().includes('male'))
         || voices[0];
       if (preferred) utterance.voice = preferred;
 
@@ -447,9 +507,10 @@ export default function VoiceStudioPage() {
         }
       };
 
-      speechSynthesis.speak(utterance);
+      window.speechSynthesis.speak(utterance);
 
     } catch (err) {
+      if (err.name === 'AbortError') return;
       console.error('RAG query error:', err);
       setMessages(prev => [...prev, {
         id: `err-${Date.now()}`,
@@ -466,8 +527,10 @@ export default function VoiceStudioPage() {
       if (callStateRef.current === 'active') {
         setTimeout(() => { try { recognitionRef.current?.start(); } catch (_) {} }, 800);
       }
+    } finally {
+      if (requestAbortRef.current === controller) requestAbortRef.current = null;
     }
-  }, [market]);
+  }, [ensureSession, market]);
 
   // ── Start Voice Call ──
   const startCall = useCallback(async () => {
@@ -482,6 +545,22 @@ export default function VoiceStudioPage() {
     isProcessingRef.current = false;
     isSpeakingRef.current = false;
 
+    if (!recognitionRef.current) {
+      setError('Voice input requires Chrome or Edge. Switch to Text Mode to continue.');
+      setUseTextMode(true);
+      setCallState('idle');
+      callStateRef.current = 'idle';
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError('Microphone access requires a secure browser context (HTTPS or localhost). Use Text Mode to continue.');
+      setUseTextMode(true);
+      setCallState('idle');
+      callStateRef.current = 'idle';
+      return;
+    }
+
     // Pre-check mic
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -495,17 +574,34 @@ export default function VoiceStudioPage() {
       return;
     }
 
+    try {
+      await ensureSession();
+    } catch (sessionError) {
+      setError(`Voice service is unavailable: ${sessionError.message}`);
+      setCallState('idle');
+      callStateRef.current = 'idle';
+      return;
+    }
+
     setCallState('active');
     callStateRef.current = 'active';
     await startMicVisualization();
     try { recognitionRef.current?.start(); } catch (_) {}
-  }, [startMicVisualization]);
+  }, [ensureSession, startMicVisualization]);
 
   // ── End Voice Call ──
   const endCall = useCallback(() => {
     callStateRef.current = 'idle';
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
+    requestAbortRef.current?.abort();
+    requestAbortRef.current = null;
     try { recognitionRef.current?.abort(); } catch (_) {}
-    speechSynthesis.cancel();
+    window.speechSynthesis?.cancel();
+    if (sessionIdRef.current) {
+      fetch(`/api/voice/session/${encodeURIComponent(sessionIdRef.current)}/end`, { method: 'POST' }).catch(() => {});
+      sessionIdRef.current = null;
+    }
     stopMicVisualization();
     isProcessingRef.current = false;
     isSpeakingRef.current = false;
@@ -530,12 +626,22 @@ export default function VoiceStudioPage() {
     setTimeout(() => setActiveStage('rag'), 80);
 
     try {
-      const res = await fetch('/api/rag/query', {
+      const callId = await ensureSession();
+      const res = await fetch('/api/voice/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, top_k: 2 }),
+        body: JSON.stringify({
+          query,
+          top_k: 2,
+          call_id: callId,
+          market,
+          language: MARKETS[market]?.lang || 'en-IN',
+        }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        throw new Error(detail?.message || detail?.error || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       setActiveStage('llm');
       setTotalCallLatency(data.latency_ms);
@@ -545,6 +651,7 @@ export default function VoiceStudioPage() {
         content: data.answer,
         sources: data.sources || [],
         latency_ms: data.latency_ms,
+        agentName: `${MARKETS[market]?.agent || 'Veyra'} (Veyra)`,
         ts: new Date().toISOString(),
       }]);
       setActiveStage(null);
@@ -561,7 +668,7 @@ export default function VoiceStudioPage() {
     } finally {
       setIsTextProcessing(false);
     }
-  }, [inputText, isTextProcessing]);
+  }, [ensureSession, inputText, isTextProcessing, market]);
 
   const isCallActive = callState === 'active';
   const isConnecting = callState === 'connecting' || callState === 'ending';
@@ -583,7 +690,7 @@ export default function VoiceStudioPage() {
           {Object.entries(MARKETS).map(([key, m]) => (
             <button
               key={key}
-              onClick={() => { if (!isCallActive) { setMarket(key); setMessages([]); } }}
+              onClick={() => { if (!isCallActive) { sessionIdRef.current = null; setMarket(key); setMessages([]); } }}
               disabled={isCallActive}
               className={`px-3.5 py-2 rounded-xl text-[13px] font-bold transition-all flex items-center gap-1.5 ${
                 market === key

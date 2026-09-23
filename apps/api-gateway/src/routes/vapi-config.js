@@ -29,7 +29,7 @@ router.get('/assistant-config', async (req, res) => {
     const agent = agentMap[market] || agentMap['india-loan'];
 
     // Load system prompt
-    let systemPrompt = `You are ${agent.name}, a professional AI voice agent for Darwix AI Financial Services helping customers with home loans and personal loans in India. Be concise — max 2 sentences per response. No bullet points or markdown.`;
+    let systemPrompt = `You are ${agent.name}, a professional Veyra AI voice agent helping customers with home loans and personal loans in India. Be concise — max 2 sentences per response. No bullet points or markdown.`;
     try {
       const promptsPath = join(__dirname, '../../../../services/rag-service/config/prompts.yaml');
       const yaml = readFileSync(promptsPath, 'utf-8');
@@ -47,8 +47,8 @@ router.get('/assistant-config', async (req, res) => {
     if (privateKey && privateKey !== 'your_vapi_api_key') {
       try {
         const assistantPayload = {
-          name: `Darwix-${agent.name}-${market}`,
-          firstMessage: `Hello! I'm ${agent.name}, your Darwix AI financial assistant. How can I help you today?`,
+          name: `Veyra-${agent.name}-${market}`,
+          firstMessage: `Hello! I'm ${agent.name}, your Veyra financial assistant. How can I help you today?`,
           transcriber: {
             provider: 'deepgram',
             model: 'nova-2',
@@ -58,8 +58,10 @@ router.get('/assistant-config', async (req, res) => {
           model: hasPublicUrl
             ? {
                 provider: 'custom-llm',
-                url: `${publicUrl}/api/voice/vapi-llm`,
-                model: 'darwix-rag',
+                // Preserve the selected regional agent when Vapi invokes the
+                // custom LLM endpoint; otherwise every call fell back to India.
+                url: `${publicUrl}/api/voice/vapi-llm?market=${encodeURIComponent(market)}`,
+                model: 'veyra-rag',
                 messages: [{ role: 'system', content: systemPrompt }],
                 temperature: 0.2,
                 maxTokens: 200,
@@ -123,8 +125,8 @@ router.get('/assistant-config', async (req, res) => {
     // ── Option B: Inline config fallback (no Vapi API key or API call failed) ──
     logger.warn('Using inline assistant config fallback');
     const inlineConfig = {
-      name: `${agent.name} - Darwix AI Voice Agent`,
-      firstMessage: `Hello! I'm ${agent.name}, your Darwix AI financial assistant. How can I help?`,
+      name: `${agent.name} - Veyra Voice Agent`,
+      firstMessage: `Hello! I'm ${agent.name}, your Veyra financial assistant. How can I help?`,
       transcriber: { provider: 'deepgram', model: 'nova-2', language: agent.lang },
       model: {
         provider: 'openai',

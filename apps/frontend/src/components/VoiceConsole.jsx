@@ -12,8 +12,8 @@ export default function VoiceConsole() {
     {
       id: 'init-1',
       sender: 'agent',
-      agentName: 'Aria (Darwix AI Agent)',
-      text: 'Hello! I am your AI Voice Agent powered by Darwix SLM. How can I assist you with loans or insurance today?',
+      agentName: 'Aria (Veyra Agent)',
+      text: 'Hello! I am your AI voice agent powered by Veyra. How can I assist you with loans or insurance today?',
       timestamp: '10:00 AM',
       ragData: null,
     }
@@ -410,7 +410,7 @@ export default function VoiceConsole() {
             </p>
 
             <button
-              onClick={() => alert('✅ Customer conversation successfully registered in Darwix CRM!')}
+              onClick={() => alert('Customer conversation successfully registered in Veyra CRM!')}
               className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-xs shadow-lg transition-all flex items-center justify-center space-x-2"
             >
               <CheckCircle2 className="w-4 h-4" />

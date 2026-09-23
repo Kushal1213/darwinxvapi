@@ -1,7 +1,7 @@
 {
   "name": "api-gateway",
   "version": "1.0.0",
-  "description": "Darwix Express API Gateway — handles voice webhooks, RAG proxy, Socket.IO, and CRM mock",
+  "description": "Veyra Express API Gateway — handles voice webhooks, RAG proxy, Socket.IO, and CRM mock",
   "type": "module",
   "main": "src/index.js",
   "scripts": {

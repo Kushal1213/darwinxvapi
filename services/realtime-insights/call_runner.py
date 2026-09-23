@@ -127,7 +127,7 @@ def main():
               f"replay took {all_results[name]['wall_clock_replay_seconds']}s")
 
     out_dir = Path(__file__).parent.parent.parent / "evaluation"
-    (out_dir / "q4_run_output.json").write_text(json.dumps(all_results, indent=2))
+    (out_dir / "q4_run_output.json").write_text(json.dumps(all_results, indent=2), encoding="utf-8")
 
     all_e2e = [v for r in all_results.values() for v in r["e2e_latency_ms_all_excl_asr"]]
     all_detect = [v for r in all_results.values() for v in r["detect_latency_ms_all"]]
@@ -191,7 +191,7 @@ def write_latency_report(out_dir, all_results, all_e2e, all_detect):
         lines.append(f"| {name} | {r['n_chunks']} | {r['n_signals_detected']} | "
                       f"{r['n_nudges_emitted']} | {r['n_nudges_suppressed']} | "
                       f"{r['wall_clock_replay_seconds']}s |")
-    (out_dir / "latency_report.md").write_text("\n".join(lines))
+    (out_dir / "latency_report.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 def write_false_positive_report(out_dir, all_results):
@@ -252,7 +252,7 @@ def write_false_positive_report(out_dir, all_results):
         "review to produce a defensible precision/recall number — see "
         "known_limitations.md.",
     ]
-    (out_dir / "false_positive_analysis.md").write_text("\n".join(lines))
+    (out_dir / "false_positive_analysis.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 if __name__ == "__main__":

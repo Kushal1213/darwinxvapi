@@ -12,10 +12,15 @@ router.get('/', async (req, res) => {
   };
 
   // Check all FastAPI services
+  // Read config during the request. index.js loads the root .env after route
+  // modules are imported, and deployments may use either insights variable.
+  const ragUrl = process.env.RAG_SERVICE_URL || 'http://localhost:8001';
+  const ingestionUrl = process.env.INGESTION_SERVICE_URL || 'http://localhost:8002';
+  const realtimeUrl = process.env.INSIGHTS_SERVICE_URL || process.env.REALTIME_AI_URL || 'http://localhost:8003';
   const checks = await Promise.allSettled([
-    axios.get(`${process.env.RAG_SERVICE_URL}/health`, { timeout: 2000 }),
-    axios.get(`${process.env.INGESTION_SERVICE_URL}/health`, { timeout: 2000 }),
-    axios.get(`${process.env.REALTIME_AI_URL}/health`, { timeout: 2000 }),
+    axios.get(`${ragUrl.replace(/\/+$/, '')}/health`, { timeout: 2000 }),
+    axios.get(`${ingestionUrl.replace(/\/+$/, '')}/health`, { timeout: 2000 }),
+    axios.get(`${realtimeUrl.replace(/\/+$/, '')}/health`, { timeout: 2000 }),
   ]);
 
   const names = ['rag', 'ingestion', 'realtime'];
