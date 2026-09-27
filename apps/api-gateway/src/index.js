@@ -19,11 +19,15 @@ import vapiConfigRoutes from './routes/vapi-config.js';
 import transcriptRoutes from './routes/transcript.js';
 import crmRoutes from './routes/crm.js';
 import healthRoutes from './routes/health.js';
+import nudgeRoutes from './routes/nudges.js';
+import knowledgeRoutes, { startKnowledgeWorker } from './routes/knowledge.js';
+import analyticsRoutes from './routes/analytics.js';
+import { createAuthentication } from './services/auth.js';
 
 // Socket handler
 import { initSocketHandlers } from './socket/handlers.js';
 
-dotenv.config({ path: resolve(__dirname, '../../../.env') });
+dotenv.config({ path: process.env.VEYRA_ENV_FILE || resolve(__dirname, '../../../.env') });
 
 export const logger = pino({
   transport: {
@@ -35,26 +39,40 @@ export const logger = pino({
 
 const app = express();
 const httpServer = createServer(app);
+const allowedOrigins = process.env.NODE_ENV === 'production' || process.env.VEYRA_TENANT_ID
+  ? [process.env.FRONTEND_URL].filter(Boolean)
+  : ['http://localhost:3000', 'http://localhost:5173', process.env.FRONTEND_URL].filter(Boolean);
+if (process.env.TRUST_PROXY === '1') app.set('trust proxy', 1);
 
 // ── Socket.IO ────────────────────────────────────────────────
 export const io = new Server(httpServer, {
   cors: {
-    origin: ['http://localhost:3000', 'http://localhost:5173', process.env.FRONTEND_URL].filter(Boolean),
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
   },
 });
+const auth = createAuthentication(io, allowedOrigins);
 initSocketHandlers(io);
 
 // ── Middleware ────────────────────────────────────────────────
-app.use(cors({ origin: ['http://localhost:3000', 'http://localhost:5173', process.env.FRONTEND_URL].filter(Boolean) }));
+app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
 // ── Routes ────────────────────────────────────────────────────
+app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
+app.use('/api', auth.middleware, auth.originGuard);
+app.use('/api/auth', auth.router);
+app.use('/api', auth.requireAuth);
+app.use('/api/team', auth.teamRouter);
+app.use('/api/knowledge', (req, res, next) => ['GET', 'HEAD', 'OPTIONS'].includes(req.method) ? next() : auth.requireAdmin(req, res, next));
 app.use('/api/health', healthRoutes);
+app.use('/api/analytics', analyticsRoutes);
 app.use('/api/rag', ragRoutes);
 app.use('/api/voice', voiceRoutes);
+app.use('/api/nudges', nudgeRoutes);
+app.use('/api/knowledge', knowledgeRoutes);
 app.use('/api/vapi', vapiConfigRoutes);
 app.use('/api/transcript', transcriptRoutes);
 app.use('/api/crm', crmRoutes);
@@ -75,7 +93,8 @@ app.use((err, req, res, _next) => {
 
 // ── Start ─────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3001;
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, process.env.VEYRA_TENANT_ID ? '127.0.0.1' : undefined, () => {
+  startKnowledgeWorker(error => logger.error(error, 'Knowledge worker failed'));
   logger.info(`🚀 API Gateway running on http://localhost:${PORT}`);
   logger.info(`📡 Socket.IO ready`);
 });

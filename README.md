@@ -18,6 +18,7 @@ Veyra is a knowledge-grounded voice intelligence platform for customer conversat
 | Dashboard | Operational overview and service status |
 | Voice Studio | Live customer-agent conversations with RAG citations |
 | Live Insights | Transcript monitoring, signal detection, and agent nudges |
+| Call History | Completed conversations, source citations, and handoff review |
 | Knowledge Hub | Source-document discovery and grounding visibility |
 | Analytics | Conversation and retrieval performance views |
 | Architecture | Runtime topology and service relationships |
@@ -60,7 +61,7 @@ The frontend talks to the gateway through Vite's local proxy. The gateway coordi
 
 ### Requirements
 
-- Node.js 18 or newer
+- Node.js 22.13 or newer (gateway uses built-in SQLite)
 - Python 3.10 or newer
 - Chrome or Edge for browser microphone and speech-recognition support
 - A Gemini API key for live model-backed responses
@@ -106,6 +107,17 @@ npm run dev:realtime
 
 ## Using Voice Studio
 
+On first launch, create the local workspace and owner account. Subsequent visits
+require sign-in. Passwords must have at least 12 characters; no default account or
+password is provided. The account protects gateway APIs and live socket events.
+See [workspace access](docs/WORKSPACE_ACCESS.md) for configuration and boundaries.
+
+For a separate tenant stack, run `npm run tenant -- init <tenant-id> <base-port>`
+and `npm run tenant -- start <tenant-id>`. Each tenant has separate storage,
+credentials, services, and browser sessions. This is a local dedicated-stack
+workflow, not shared-process multi-tenancy or production hosting.
+See [tenant provisioning](docs/TENANT_STACKS.md) for setup and security limits.
+
 1. Open **Voice Studio**.
 2. Select a market agent.
 3. Start a voice call and allow microphone access.
@@ -119,6 +131,65 @@ The experience degrades gracefully when an external voice provider is unavailabl
 ## Live Insights
 
 Live Insights receives transcript events from the gateway and displays conversation telemetry, detected signals, recommended actions, and escalation state. Built-in scenarios can be used to exercise the signal pipeline without placing a real call.
+
+Operator nudges persist across refreshes and gateway restarts. Acknowledge or
+dismiss active alerts, and record usefulness feedback in Mission Control or Call
+Review. See [operator nudge rules](docs/NUDGE_WORKFLOW.md) for expiry, priority,
+duplicate suppression, and the feedback API.
+
+## Call Review
+
+End a voice call or select **End Session** after a text conversation, then open
+**Call History** to review the transcript, citations, and any human handoff request.
+Active and completed calls persist in SQLite across gateway restarts. Set
+`VEYRA_DATABASE_PATH` to override `data/veyra.sqlite`. Existing JSON archives in
+`data/calls/` (or `CALL_HISTORY_DIR`) are imported once without deleting originals.
+The installation currently supports one workspace and its owner account.
+
+See [the session contract](docs/CALL_SESSION_CONTRACT.md) for lifecycle rules,
+API endpoints, and current limitations.
+
+## Operational Analytics
+
+Dashboard and Analytics now read persisted workspace calls. Filter Analytics by
+7, 30, or 90 UTC days and agent/market, inspect call volume, handoff requests,
+session duration, recorded reply latency, and citation coverage, or export daily
+counts as CSV. Missing measurements appear as unavailable rather than sample data.
+Dashboard includes service health and direct links to individual call reviews;
+review URLs can be bookmarked and support browser Back/Forward.
+
+See [analytics definitions](docs/ANALYTICS.md) for cohort boundaries, sample counts,
+and limitations. Citation presence is not a measure of answer correctness.
+
+## Grounding Evaluation
+
+The repository includes a provider-free grounding evaluation starter suite. It
+checks fixture cases for answerable questions, wrong market/product requests,
+unpublished draft content, and unsupported questions, then writes a JSON report
+with pass/fail denominators, retrieval mode, sources, and abstention reasons.
+
+Run it from the repository root:
+
+```powershell
+$env:PYTHONPATH = 'services'
+python services/grounding_eval.py --output evaluation/grounding_report.json
+```
+
+See [grounding evaluation](docs/GROUNDING_EVALUATION.md) for manifest fields and
+limits. Passing the fixture suite is not a production accuracy claim.
+
+## Provider Readiness
+
+Generate a local provider and dependency inventory without printing secrets:
+
+```powershell
+npm run readiness:providers
+```
+
+Use `-- --audit` to include an `npm audit --json` summary, or
+`-- --output evaluation/provider_inventory.json` to write a review artifact.
+See [provider readiness](docs/PROVIDER_READINESS.md) for report fields and
+current expected findings.
 
 ## Configuration
 
@@ -194,7 +265,10 @@ Check the running stack through:
 http://localhost:3001/api/health
 ```
 
-The health endpoint reports each service separately and returns a degraded status when an optional dependency is unavailable.
+The health endpoint requires a signed-in session. It reports each service
+separately and returns a degraded status when an optional dependency is unavailable.
+
+Run gateway integration tests with `npm run test --workspace apps/api-gateway`.
 
 ## License
 

@@ -1,0 +1,246 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { Check, X, RefreshCw } from 'lucide-react';
+import { io } from 'socket.io-client';
+import { EmptyState, LoadingState } from './WorkspaceUI';
+
+const isActive = (nudge) =>
+  ['created', 'displayed'].includes(nudge.status) &&
+  Date.parse(nudge.expires_at) > Date.now();
+
+export default function NudgeFeed({ callId = null, review = false }) {
+  const [nudges, setNudges] = useState([]);
+  const [view, setView] = useState(review ? 'all' : 'active');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [busy, setBusy] = useState({});
+  const [revision, setRevision] = useState(0);
+  const generation = useRef(0);
+
+  useEffect(() => {
+    let live = true;
+    let sequence = 0;
+    let controller;
+    generation.current += 1;
+    setNudges([]);
+    setError('');
+    setActionError('');
+    setLoading(true);
+    async function refresh() {
+      const request = ++sequence;
+      controller?.abort();
+      controller = new AbortController();
+      try {
+        const response = await fetch(
+          `/api/nudges${callId ? `?call_id=${encodeURIComponent(callId)}` : ''}`,
+          { signal: controller.signal }
+        );
+        if (!response.ok)
+          throw new Error('Nudges are unavailable. Please retry.');
+        const data = await response.json();
+        if (live && request === sequence) {
+          setNudges(data.nudges);
+          setError('');
+        }
+      } catch (err) {
+        if (live && err.name !== 'AbortError') setError(err.message);
+      } finally {
+        if (live && request === sequence) setLoading(false);
+      }
+    }
+    refresh();
+    const timer = setInterval(refresh, 5000);
+    const socket = io({
+      path: '/socket.io',
+      transports: ['websocket', 'polling'],
+    });
+    socket.on('connect', refresh);
+    socket.on('nudge', refresh);
+    socket.on('nudge:updated', refresh);
+    socket.on('insights:call:ended', refresh);
+    return () => {
+      live = false;
+      generation.current += 1;
+      controller?.abort();
+      clearInterval(timer);
+      socket.disconnect();
+    };
+  }, [callId, revision]);
+
+  async function act(id, action) {
+    const current = generation.current;
+    setBusy((previous) => ({ ...previous, [id]: true }));
+    try {
+      const response = await fetch(
+        `/api/nudges/${encodeURIComponent(id)}/actions`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action }),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error || 'Could not save your response');
+      if (current === generation.current) {
+        setNudges((previous) =>
+          previous.map((nudge) => (nudge.id === id ? data.nudge : nudge))
+        );
+        setActionError('');
+      }
+    } catch (err) {
+      if (current === generation.current) setActionError(err.message);
+    } finally {
+      setBusy((previous) => ({ ...previous, [id]: false }));
+    }
+  }
+
+  // Mark a nudge displayed only when its row is actually mounted in the feed.
+  const visible = nudges.filter((nudge) => view === 'all' || isActive(nudge));
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="panel-title">Operator nudges</h2>
+        <div className="flex items-center gap-3">
+          <div role="group" aria-label="Nudge view" className="flex gap-1">
+            {[
+              ['active', 'Active'],
+              ['all', 'Recent'],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                aria-pressed={view === value}
+                onClick={() => setView(value)}
+                className={`px-3 py-2 text-sm border-b-2 ${view === value ? 'border-[var(--accent)] text-accent' : 'border-transparent'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <button
+            aria-label="Refresh nudges"
+            title="Refresh nudges"
+            className="btn"
+            onClick={() => setRevision((value) => value + 1)}
+          >
+            <RefreshCw size={16} />
+          </button>
+        </div>
+      </div>
+      {loading && <LoadingState label="Loading nudges" rows={2} />}
+      {error && (
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      )}
+      {actionError && (
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          {actionError}
+        </p>
+      )}
+      {!loading && !error && visible.length === 0 && (
+        <EmptyState
+          compact
+          icon={Check}
+          title={
+            view === 'active'
+              ? 'Nothing needs your attention'
+              : 'No nudges recorded'
+          }
+        >
+          {view === 'active'
+            ? 'Relevant recommendations will appear here as conversations develop.'
+            : 'Recorded nudges and your responses will appear here.'}
+        </EmptyState>
+      )}
+      <div className="space-y-3">
+        {visible.map((nudge) => (
+          <NudgeRow
+            key={nudge.id}
+            nudge={nudge}
+            busy={busy[nudge.id]}
+            onAction={act}
+            showCall={!callId}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function NudgeRow({ nudge, busy, onAction, showCall }) {
+  const displayed = useRef(false);
+  useEffect(() => {
+    if (nudge.status === 'created' && isActive(nudge) && !displayed.current) {
+      displayed.current = true;
+      onAction(nudge.id, 'displayed');
+    }
+  }, [nudge.id, nudge.status, onAction]);
+  const active = isActive(nudge);
+  const status =
+    ['created', 'displayed'].includes(nudge.status) && !active
+      ? 'expired'
+      : nudge.status;
+  const border =
+    nudge.priority === 'HIGH'
+      ? 'border-red-500'
+      : nudge.priority === 'MEDIUM'
+        ? 'border-amber-500'
+        : 'border-emerald-500';
+  return (
+    <article className={`border-l-2 ${border} pl-4 py-3 space-y-3 min-w-0`}>
+      <div className="flex flex-wrap justify-between gap-2 text-xs text-muted">
+        <span>
+          {nudge.type.replaceAll('_', ' ')} / {nudge.priority} / {status}
+        </span>
+        <time>{new Date(nudge.created_at).toLocaleTimeString()}</time>
+      </div>
+      {showCall && (
+        <p className="text-xs break-all text-muted">Call {nudge.call_id}</p>
+      )}
+      <p className="text-sm break-words">{nudge.text}</p>
+      <div className="flex flex-wrap items-end gap-3">
+        {active && (
+          <>
+            <button
+              disabled={busy}
+              aria-label="Acknowledge nudge"
+              title="Acknowledge nudge"
+              onClick={() => onAction(nudge.id, 'acknowledged')}
+              className="p-2 border rounded-md border-[var(--accent)] text-accent disabled:opacity-40"
+            >
+              <Check size={18} />
+            </button>
+            <button
+              disabled={busy}
+              aria-label="Dismiss nudge"
+              title="Dismiss nudge"
+              onClick={() => onAction(nudge.id, 'dismissed')}
+              className="btn"
+            >
+              <X size={18} />
+            </button>
+          </>
+        )}
+        <label className="text-xs text-muted">
+          Feedback
+          <select
+            aria-label="Nudge feedback"
+            disabled={busy}
+            value={nudge.feedback || ''}
+            onChange={(event) => onAction(nudge.id, event.target.value)}
+            className="field mt-2"
+          >
+            <option value="" disabled>
+              Not rated
+            </option>
+            <option value="useful">Useful</option>
+            <option value="not_useful">Not useful</option>
+            <option value="wrong_signal">Wrong signal</option>
+            <option value="too_late">Too late</option>
+          </select>
+        </label>
+      </div>
+    </article>
+  );
+}

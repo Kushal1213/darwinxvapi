@@ -3,11 +3,16 @@
   "version": "1.0.0",
   "description": "Veyra — AI agents that understand every customer conversation.",
   "private": true,
+  "engines": { "node": ">=22.13.0" },
   "workspaces": [
     "apps/frontend",
     "apps/api-gateway"
   ],
   "scripts": {
+    "tenant": "node scripts/tenant.mjs",
+    "test:tenants": "node --test scripts/tenant-runtime.test.mjs",
+    "test:provider-inventory": "node --test scripts/provider-inventory.test.mjs",
+    "readiness:providers": "node scripts/provider-inventory.mjs",
     "dev": "node scripts/start-stack.mjs",
     "dev:gateway": "cd apps/api-gateway && npm run dev",
     "dev:frontend": "cd apps/frontend && npm run dev",

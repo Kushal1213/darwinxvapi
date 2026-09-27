@@ -1,192 +1,230 @@
-import React, { useState } from 'react';
-import { 
-  Radio, 
-  Database, 
-  Cpu, 
-  Terminal, 
-  Layers, 
-  CheckCircle2, 
-  ShieldCheck, 
-  Zap, 
-  Activity, 
-  Server,
+import React, { useEffect, useState } from 'react';
+import {
   ArrowRight,
-  RefreshCw
+  Cpu,
+  Database,
+  Globe,
+  Radio,
+  RefreshCw,
+  Server,
 } from 'lucide-react';
-
+import {
+  PageHeading,
+  StatusBadge,
+  LoadingState,
+} from '../components/WorkspaceUI';
+const stages = [
+  {
+    id: 'conversation',
+    title: 'Conversation',
+    label: '01',
+    icon: Radio,
+    description: 'Voice or text enters through the browser.',
+    detail:
+      'The browser manages microphone access, speech recognition, spoken responses, and text input. Voice support depends on the browser and configured providers.',
+    items: [
+      'Microphone and text input',
+      'Live transcript',
+      'Playback controls',
+    ],
+  },
+  {
+    id: 'orchestration',
+    title: 'Orchestration',
+    label: '02',
+    icon: Server,
+    description: 'One gateway coordinates the session.',
+    detail:
+      'The gateway authenticates workspace access, maintains the call lifecycle, routes requests, and streams conversation events to the interface.',
+    items: [
+      'Authenticated session',
+      'Persisted call history',
+      'Live event delivery',
+    ],
+  },
+  {
+    id: 'knowledge',
+    title: 'Knowledge',
+    label: '03',
+    icon: Database,
+    description: 'Relevant knowledge supports the response.',
+    detail:
+      'Retrieval selects eligible sources by market and product. Managed documents follow revision, review, publication, and withdrawal workflows. Returned citations identify the source used.',
+    items: [
+      'Market and product scope',
+      'Reviewed document revisions',
+      'Source citations',
+    ],
+  },
+  {
+    id: 'response',
+    title: 'Response & insights',
+    label: '04',
+    icon: Cpu,
+    description: 'Answers and signals return to the workspace.',
+    detail:
+      'The configured generation service prepares a response. Conversation signals feed operator nudges; the application records conversation evidence for later review.',
+    items: ['Grounded response', 'Operator nudges', 'Conversation review'],
+  },
+];
+const serviceNames = {
+  gateway: 'API gateway',
+  rag: 'Knowledge retrieval',
+  ingestion: 'Document processing',
+  realtime: 'Live insights',
+};
 export default function ArchitecturePage() {
-  const [activeStep, setActiveStep] = useState(1);
-  const [logs, setLogs] = useState([
-    { time: '09:42:10.712', type: 'event', text: 'Event: STT_Final_Transcript', payload: '"What is the penalty for early repayment?"' },
-    { time: '09:42:10.145', type: 'action', text: 'Action: Semantic_Search (Query: \'early repayment penalty\')', payload: 'Result: Found 3 chunks (Top match: Policy_42.pdf, 98%)' },
-    { time: '09:42:10.280', type: 'action', text: 'Action: LLM_Synthesis (Context: Policy_42)', payload: 'Selected Prompt: Financial Policy Guidance' },
-    { time: '09:42:10.850', type: 'event', text: 'Event: TTS_Stream_Start', payload: 'Latency: 738ms (TTFB)' },
-  ]);
-
+  const [selected, setSelected] = useState('conversation');
+  const [health, setHealth] = useState(null);
+  const [error, setError] = useState('');
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort('timeout'), 10000);
+    setHealth(null);
+    setError('');
+    fetch('/api/health', { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Service health is unavailable.');
+        return response.json();
+      })
+      .then((data) => {
+        if (!controller.signal.aborted) setHealth(data);
+      })
+      .catch((err) => {
+        if (controller.signal.reason === 'timeout')
+          setError('The health check timed out. Refresh to try again.');
+        else if (!controller.signal.aborted) setError(err.message);
+      })
+      .finally(() => clearTimeout(timer));
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [revision]);
+  const stage = stages.find((item) => item.id === selected);
   return (
-    <div className="min-h-screen bg-[#090A0F] text-slate-100 py-10 px-4 sm:px-6 lg:px-12 space-y-12 max-w-[1440px] mx-auto">
-      
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-6">
-        <div>
-          <h1 className="text-3xl font-extrabold text-white tracking-tight">Voice Agent Architecture</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Real-time streaming pipeline architecture powered by WebRTC, FAISS Vector Search, Gemini 2.5 Flash & Deepgram Nova-2
-          </p>
-        </div>
-
-        <div className="flex items-center space-x-3">
-          <div className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30 text-xs font-semibold flex items-center space-x-1.5">
-            <Activity className="w-3.5 h-3.5" />
-            <span>TTFB Latency: 320ms</span>
-          </div>
-          <div className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-semibold flex items-center space-x-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>SLM Active</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ─────────────────────────────────────────────────────────────
-          1. PIPELINE STAGE CARDS
-      ───────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        
-        {/* Stage 1 */}
-        <div 
-          onClick={() => setActiveStep(1)}
-          className={`p-6 rounded-2xl border transition-all cursor-pointer space-y-4 ${
-            activeStep === 1 
-              ? 'bg-[#141724] border-blue-500/50 shadow-lg shadow-blue-500/10 ring-1 ring-blue-500/30' 
-              : 'bg-[#12141C] border-white/10 hover:border-white/20'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400">
-              <Radio className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-mono font-bold text-slate-400">STAGE 01</span>
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-white">1. Ingestion & STT</h3>
-            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-              Ultra-low latency streaming Speech-to-Text via WebRTC audio stream & Deepgram Nova-2 ASR engine.
-            </p>
-          </div>
-          <div className="pt-2 text-xs font-semibold text-blue-400 flex items-center space-x-1">
-            <span>Learn STT Spec</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </div>
-        </div>
-
-        {/* Stage 2 */}
-        <div 
-          onClick={() => setActiveStep(2)}
-          className={`p-6 rounded-2xl border transition-all cursor-pointer space-y-4 ${
-            activeStep === 2 
-              ? 'bg-[#141724] border-emerald-500/50 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500/30' 
-              : 'bg-[#12141C] border-white/10 hover:border-white/20'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-              <Database className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-mono font-bold text-slate-400">STAGE 02</span>
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-white">2. Semantic Router & RAG</h3>
-            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-              Intent classification and FAISS 3072d vector search across grounded enterprise documents.
-            </p>
-          </div>
-          <div className="pt-2 text-xs font-semibold text-emerald-400 flex items-center space-x-1">
-            <span>Inspect Vector Store</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </div>
-        </div>
-
-        {/* Stage 3 */}
-        <div 
-          onClick={() => setActiveStep(3)}
-          className={`p-6 rounded-2xl border transition-all cursor-pointer space-y-4 ${
-            activeStep === 3 
-              ? 'bg-[#141724] border-amber-500/50 shadow-lg shadow-amber-500/10 ring-1 ring-amber-500/30' 
-              : 'bg-[#12141C] border-white/10 hover:border-white/20'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-              <Cpu className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-mono font-bold text-slate-400">STAGE 03</span>
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-white">3. Generation & TTS</h3>
-            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-              Context-aware LLM response synthesis and ultra-natural neural text-to-speech voice output.
-            </p>
-          </div>
-          <div className="pt-2 text-xs font-semibold text-amber-400 flex items-center space-x-1">
-            <span>View Synthesis Config</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </div>
-        </div>
-
-      </div>
-
-      {/* ─────────────────────────────────────────────────────────────
-          2. LIVE EXECUTION TERMINAL WINDOW (agent_execution_log.sh)
-      ───────────────────────────────────────────────────────────── */}
-      <div className="bg-[#12141C] border border-white/10 rounded-2xl overflow-hidden shadow-2xl space-y-0">
-        <div className="bg-[#171922] px-6 py-4 border-b border-white/10 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <span className="w-3.5 h-3.5 rounded-full bg-red-500 inline-block"></span>
-            <span className="w-3.5 h-3.5 rounded-full bg-amber-500 inline-block"></span>
-            <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 inline-block"></span>
-            <span className="text-slate-300 font-mono font-bold pl-3 text-xs">agent_execution_log.sh</span>
-          </div>
-          
-          <button 
-            onClick={() => {
-              setLogs((prev) => [
-                ...prev,
-                { time: new Date().toLocaleTimeString(), type: 'event', text: 'Event: STT_Interim_Utterance', payload: '"Can I apply online?"' },
-                { time: new Date().toLocaleTimeString(), type: 'action', text: 'Action: Semantic_Search (Query: \'online application process\')', payload: 'Result: Found 2 chunks (Top match: Terms_2023.docx, 84%)' }
-              ]);
-            }}
-            className="px-3 py-1 rounded bg-white/5 border border-white/10 text-slate-300 text-xs font-mono flex items-center space-x-1.5 hover:bg-white/10"
+    <div className="page">
+      <PageHeading
+        eyebrow="Behind the conversation"
+        title="Architecture"
+        description="How voice, knowledge, and live assistance connect across the workspace."
+        actions={
+          <button
+            className="btn"
+            onClick={() => setRevision((value) => value + 1)}
           >
-            <RefreshCw className="w-3 h-3 text-blue-400" />
-            <span>Simulate Step</span>
+            <RefreshCw size={14} />
+            Refresh status
           </button>
-        </div>
-
-        <div className="p-6 font-mono text-xs sm:text-sm space-y-4 bg-[#0B0C10] text-slate-200">
-          {logs.map((log, index) => (
-            <div key={index} className="space-y-1">
-              <div>
-                <span className={log.type === 'event' ? 'text-emerald-400' : 'text-amber-400'}>
-                  [{log.time}]
-                </span>{' '}
-                <span className="font-bold text-white">{log.text}</span>
-              </div>
-              {log.payload && (
-                <div className="pl-6 text-slate-400">
-                  └ {log.payload}
-                </div>
-              )}
-            </div>
-          ))}
-
-          <div className="pt-3">
-            <div className="inline-block bg-red-950/30 border border-red-500/40 text-red-300 px-3 py-1.5 rounded text-xs font-mono animate-pulse">
-              Waiting for next user utterance...
-            </div>
+        }
+      />
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <h2 className="panel-title">From question to understanding</h2>
+            <p className="panel-description">
+              Select a stage to explore its role. This is a system map, not a
+              live execution trace.
+            </p>
           </div>
+          <Globe size={18} className="text-muted" />
         </div>
-      </div>
-
+        <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          {stages.map(({ id, title, label, icon: Icon, description }) => (
+            <button
+              key={id}
+              aria-pressed={selected === id}
+              onClick={() => setSelected(id)}
+              className={`text-left p-5 rounded-lg border ${selected === id ? 'border-[var(--accent)] bg-[var(--accent-soft)]' : 'hover:bg-[var(--surface-soft)]'}`}
+            >
+              <div className="flex justify-between items-center mb-7">
+                <Icon size={21} strokeWidth={1.5} className="text-accent" />
+                <span className="font-mono text-[10px] text-muted">
+                  {label}
+                </span>
+              </div>
+              <h3 className="text-sm font-semibold">{title}</h3>
+              <p className="text-[11px] text-muted leading-6 mt-2">
+                {description}
+              </p>
+              <ArrowRight size={15} className="text-accent mt-4" />
+            </button>
+          ))}
+        </div>
+        <div
+          className="border-t mt-6 pt-6 grid md:grid-cols-[1.5fr_1fr] gap-8"
+          role="region"
+          aria-label={stage.title}
+        >
+          <div>
+            <h3 className="text-sm font-semibold">{stage.title}</h3>
+            <p className="text-xs text-muted leading-7 mt-2 max-w-2xl">
+              {stage.detail}
+            </p>
+          </div>
+          <ul className="space-y-3">
+            {stage.items.map((item) => (
+              <li key={item} className="text-xs flex items-center gap-3">
+                <span className="status-dot text-accent" />
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <h2 className="panel-title">Service availability</h2>
+            <p className="panel-description">
+              Reported by the workspace gateway
+            </p>
+          </div>
+          {health && (
+            <StatusBadge
+              tone={health.status === 'healthy' ? 'success' : 'warning'}
+            >
+              {health.status === 'healthy'
+                ? 'All available'
+                : 'Needs attention'}
+            </StatusBadge>
+          )}
+        </div>
+        {error ? (
+          <p role="alert" className="notice notice-error">
+            {error}
+          </p>
+        ) : !health ? (
+          <LoadingState label="Checking services" />
+        ) : (
+          <>
+            <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              {Object.entries(serviceNames).map(([key, label]) => (
+                <div key={key} className="signal-tile">
+                  <p className="text-xs font-semibold mb-4">{label}</p>
+                  <StatusBadge
+                    tone={
+                      health.services?.[key]?.status === 'ok'
+                        ? 'success'
+                        : 'warning'
+                    }
+                  >
+                    {health.services?.[key]?.status === 'ok'
+                      ? 'Available'
+                      : 'Unavailable'}
+                  </StatusBadge>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted mt-5">
+              Checked {new Date(health.timestamp).toLocaleString()}.
+              Availability does not establish response accuracy or end-to-end
+              voice performance.
+            </p>
+          </>
+        )}
+      </section>
     </div>
   );
 }

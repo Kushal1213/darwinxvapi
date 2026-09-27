@@ -1,4 +1,5 @@
 import { logger } from '../index.js';
+import { getNudgeStore } from '../services/nudges.js';
 
 export function initSocketHandlers(io) {
   io.on('connection', (socket) => {
@@ -14,9 +15,15 @@ export function initSocketHandlers(io) {
     });
 
     // Client requests a nudge to be dismissed
-    socket.on('nudge:dismiss', (data) => {
-      const { nudge_id } = data;
-      io.emit('nudge:dismissed', { nudge_id, dismissed_by: socket.id });
+    socket.on('nudge:dismiss', (data, callback) => {
+      try {
+        if (typeof data?.nudge_id !== 'string') throw new Error('Invalid nudge ID');
+        const nudge = getNudgeStore().act(data.nudge_id, 'dismissed', socket.request.session.userId);
+        io.emit('nudge:updated', { nudge });
+        if (typeof callback === 'function') callback({ nudge });
+      } catch (error) {
+        if (typeof callback === 'function') callback({ error: error.message });
+      }
     });
 
     socket.on('disconnect', () => {

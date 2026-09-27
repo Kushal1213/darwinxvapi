@@ -1,327 +1,1077 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Database, FileText, Sparkles, CheckCircle2, ShieldCheck, Tag, Layers, ArrowRight, Eye, ChevronRight, Hash, Filter, Download } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Archive,
+  ArrowLeft,
+  BookOpen,
+  Check,
+  Eye,
+  FilePlus2,
+  RefreshCw,
+  Search,
+  Upload,
+} from 'lucide-react';
+import { useWorkspaceAuth } from '../components/WorkspaceAuth';
+import {
+  EmptyState,
+  LoadingState,
+  PageHeading,
+  StatusBadge,
+} from '../components/WorkspaceUI';
+
+const inputClass = 'field';
+const buttonClass = 'btn';
+const markets = ['india', 'philippines', 'indonesia'];
+const products = [
+  'loan',
+  'personal-loan',
+  'auto-loan',
+  'insurance',
+  'life-insurance',
+  'health-insurance',
+  'bancassurance',
+  'finance',
+  'general',
+];
+const productLabel = (value) =>
+  value === 'general' ? 'Shared across products' : value.replaceAll('-', ' ');
+async function api(path, options) {
+  const response = await fetch(path, options);
+  const data = await response.json();
+  if (!response.ok)
+    throw new Error(data.error || 'The request failed. Please try again.');
+  return data;
+}
 
 export default function KnowledgeHubPage() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState('all'); // 'all', 'india', 'philippines', 'indonesia'
-  const [selectedChunk, setSelectedChunk] = useState(null);
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState(null);
+  const user = useWorkspaceAuth().user;
+  const canManage = user.role === 'admin';
+  const [documents, setDocuments] = useState([]);
+  const [jobs, setJobs] = useState([]);
+  const [jobBusy, setJobBusy] = useState(null);
+  const [error, setError] = useState('');
+  const [listError, setListError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
+  const [busy, setBusy] = useState(null);
+  const [filter, setFilter] = useState('');
+  const [status, setStatus] = useState('all');
+  const [selected, setSelected] = useState(null);
+  const [revisionTarget, setRevisionTarget] = useState(null);
+  const [revisions, setRevisions] = useState([]);
+  const [comparison, setComparison] = useState(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [query, setQuery] = useState('');
+  const [market, setMarket] = useState('india');
+  const [product, setProduct] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [result, setResult] = useState(null);
+  const [searchError, setSearchError] = useState('');
+  const alive = useRef(true);
+  const detailRequest = useRef(0);
 
-  // Ingested Knowledge Base Documents (29 Ingested Files across BFSI domains)
-  const documents = [
-    {
-      id: 'doc-1',
-      title: 'loan_qualification_rules.txt',
-      market: 'India BFSI',
-      category: 'Loans & Underwriting',
-      chunksCount: 14,
-      vectorDim: '3072d',
-      piiStatus: 'Clean (Zero PII)',
-      lastIngested: '2026-08-06',
-      sampleSnippet: 'PERSONAL LOAN ELIGIBILITY: Minimum age: 21 years | Minimum monthly income: INR 25,000 (salaried) | Minimum CIBIL: 700'
-    },
-    {
-      id: 'doc-2',
-      title: 'objection_handling_playbook.txt',
-      market: 'India BFSI',
-      category: 'Agent Sales Playbook',
-      chunksCount: 12,
-      vectorDim: '3072d',
-      piiStatus: 'Clean (Zero PII)',
-      lastIngested: '2026-08-06',
-      sampleSnippet: 'OBJECTION: Employer insurance is enough -> Group insurance stops upon resignation. Personal term plan offers lifetime security.'
-    },
-    {
-      id: 'doc-3',
-      title: 'ph_life_insurance_complete.txt',
-      market: 'Philippines',
-      category: 'Taglish Bancassurance',
-      chunksCount: 18,
-      vectorDim: '3072d',
-      piiStatus: 'Clean (Zero PII)',
-      lastIngested: '2026-08-06',
-      sampleSnippet: 'FREE LOOK PERIOD: 15 days to review policy under PH Insurance Code. Premium starts at 800 PHP/mo for 2M coverage.'
-    },
-    {
-      id: 'doc-4',
-      title: 'indonesia_finance_complete.txt',
-      market: 'Indonesia',
-      category: 'Bahasa Multifinance',
-      chunksCount: 16,
-      vectorDim: '3072d',
-      piiStatus: 'Clean (Zero PII)',
-      lastIngested: '2026-08-06',
-      sampleSnippet: 'DENDA KETERLAMBATAN: Sesuai regulasi OJK adalah 0.5% per hari dari angsuran tertunggak. DP minimum 20%.'
-    },
-    {
-      id: 'doc-5',
-      title: 'insurance_product_faq_internal.txt',
-      market: 'India BFSI',
-      category: 'Health & Term Insurance',
-      chunksCount: 24,
-      vectorDim: '3072d',
-      piiStatus: 'Clean (Zero PII)',
-      lastIngested: '2026-08-06',
-      sampleSnippet: 'PRE-EXISTING DISEASE (PED): Waiting period is 36 months for specific chronic conditions.'
-    }
-  ];
-
-  // Handle Search Execution
-  const handleSearch = async (queryToRun) => {
-    const q = queryToRun || searchQuery;
-    if (!q.trim()) return;
-
-    setIsSearching(true);
-
+  async function refresh() {
     try {
-      const res = await fetch('/api/rag/retrieve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q, top_k: 3 })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setSearchResults(data);
-      } else {
-        throw new Error('Fallback search');
+      const [data, queue] = await Promise.all([
+        api('/api/knowledge/documents'),
+        canManage ? api('/api/knowledge/jobs') : Promise.resolve({ jobs: [] }),
+      ]);
+      if (alive.current) {
+        setDocuments(data.documents);
+        setJobs(queue.jobs);
+        setListError('');
       }
     } catch (err) {
-      setTimeout(() => {
-        setSearchResults({
-          query: q,
-          latency_ms: 280,
-          sources: [
-            { source: 'loan_qualification_rules.txt', score: 0.7466, title: 'Loan Qualification Rules' },
-            { source: 'objection_handling_playbook.txt', score: 0.6920, title: 'Objection Handling Playbook' }
-          ],
-          chunks: [
-            {
-              chunk_id: 'faiss-chk-1e89',
-              source: 'loan_qualification_rules.txt',
-              content: 'PERSONAL & HOME LOAN ELIGIBILITY:\n- Minimum Entry Age: 21 years (Max 58 years at maturity)\n- Minimum Salary: ₹25,000/month for salaried | ₹40,000 for self-employed\n- Maximum Loan Amount: Up to ₹55 Lakhs based on FOIR < 50%\n- CIBIL Cutoff: 700 minimum (750+ preferred for 10.5% p.a. rate)',
-              category: 'Underwriting'
-            }
-          ]
-        });
-      }, 400);
+      if (alive.current) setListError(err.message);
     } finally {
-      setIsSearching(false);
+      if (alive.current) setLoading(false);
     }
-  };
+  }
+  useEffect(() => {
+    alive.current = true;
+    refresh();
+    const timer = setInterval(refresh, 3000);
+    return () => {
+      alive.current = false;
+      clearInterval(timer);
+      detailRequest.current += 1;
+    };
+  }, []);
+
+  async function upload(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    setUploading(true);
+    setError('');
+    try {
+      await api(
+        '/api/knowledge/documents' +
+          (revisionTarget ? '/' + revisionTarget.id + '/revisions' : ''),
+        { method: 'POST', body: new FormData(form) }
+      );
+      form.reset();
+      setRevisionTarget(null);
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+  async function action(doc, name) {
+    if (
+      name === 'archive' &&
+      !window.confirm(
+        'Archive "' + doc.title + '" and remove its chunks from retrieval?'
+      )
+    )
+      return;
+    setBusy(doc.id);
+    setError('');
+    try {
+      const data = await api(
+        '/api/knowledge/documents/' + doc.id + '/' + name,
+        {
+          method: 'POST',
+          ...(name === 'reject'
+            ? {
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason: rejectionReason }),
+              }
+            : {}),
+        }
+      );
+      setResult(null);
+      await refresh();
+      if (selected) await inspect(data.document);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function jobAction(job, name) {
+    setJobBusy(job.id);
+    setError('');
+    try {
+      await api('/api/knowledge/jobs/' + job.id + '/' + name, {
+        method: 'POST',
+      });
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setJobBusy(null);
+    }
+  }
+  async function inspect(doc) {
+    const request = ++detailRequest.current;
+    setSelected({ document: doc, chunks: [] });
+    setRevisions([]);
+    setComparison(null);
+    setRejectionReason('');
+    setDetailLoading(true);
+    setError('');
+    try {
+      const [data, history] = await Promise.all([
+        api('/api/knowledge/documents/' + doc.id),
+        api('/api/knowledge/documents/' + doc.id + '/revisions'),
+      ]);
+      const previous = history.revisions.find(
+        (item) => item.id === data.document.previousRevisionId
+      );
+      const before =
+        previous && canManage
+          ? await api('/api/knowledge/documents/' + previous.id)
+          : null;
+      if (request === detailRequest.current) {
+        setSelected(data);
+        setRevisions(history.revisions);
+        setComparison(before);
+      }
+    } catch (err) {
+      if (request === detailRequest.current) setError(err.message);
+    } finally {
+      if (request === detailRequest.current) setDetailLoading(false);
+    }
+  }
+  async function search(event) {
+    event.preventDefault();
+    setSearching(true);
+    setSearchError('');
+    setResult(null);
+    try {
+      setResult(
+        await api('/api/rag/retrieve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: query.trim(),
+            market,
+            ...(product ? { product } : {}),
+            top_k: 3,
+          }),
+        })
+      );
+    } catch (err) {
+      setSearchError(err.message);
+    } finally {
+      setSearching(false);
+    }
+  }
+  const latest = documents.filter((doc) => doc.isLatest !== false);
+  const visible = latest.filter(
+    (doc) =>
+      (status === 'all' ||
+        (status === 'rejected'
+          ? doc.reviewStatus === 'rejected'
+          : doc.status === status)) &&
+      (doc.title + ' ' + doc.filename + ' ' + doc.market)
+        .toLowerCase()
+        .includes(filter.toLowerCase())
+  );
+  const selectedDoc =
+    selected &&
+    (documents.find((doc) => doc.id === selected.document.id) ||
+      selected.document);
+  useEffect(() => {
+    if (
+      selectedDoc &&
+      selectedDoc.status !== selected.document.status &&
+      ['ready', 'indexed', 'archived'].includes(selectedDoc.status)
+    )
+      void inspect(selectedDoc);
+  }, [selectedDoc?.id, selectedDoc?.status, selected?.document.status]);
+  function newRevision(doc) {
+    detailRequest.current += 1;
+    setSelected(null);
+    setRevisionTarget(doc);
+    setShowUpload(true);
+    setError('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function actions(doc) {
+    const isLatest = doc.isLatest !== false;
+    return (
+      <div className="flex flex-wrap gap-2">
+        {canManage &&
+          isLatest &&
+          !['uploaded', 'processing', 'publishing', 'withdrawing'].includes(
+            doc.status
+          ) &&
+          !(doc.status === 'ready' && doc.reviewStatus === 'pending') && (
+            <button
+              className={buttonClass}
+              disabled={busy !== null}
+              onClick={() => newRevision(doc)}
+            >
+              <FilePlus2 size={16} />
+              New revision
+            </button>
+          )}
+        {canManage &&
+          isLatest &&
+          ['failed', 'archived'].includes(doc.status) && (
+            <button
+              className={buttonClass}
+              disabled={busy !== null}
+              onClick={() => action(doc, 'retry')}
+            >
+              <RefreshCw size={16} />
+              {doc.status === 'archived'
+                ? 'Restore as new revision'
+                : 'Retry processing'}
+            </button>
+          )}
+        {canManage &&
+          !['archived', 'superseded', 'withdrawing'].includes(doc.status) && (
+            <button
+              className={buttonClass}
+              title="Archive document"
+              aria-label={'Archive ' + doc.title}
+              disabled={
+                busy !== null || ['uploaded', 'processing'].includes(doc.status)
+              }
+              onClick={() => action(doc, 'archive')}
+            >
+              <Archive size={16} />
+            </button>
+          )}
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-[1400px] mx-auto space-y-10 animate-fadeIn">
-      
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b dark:border-[rgba(255,255,255,0.06)] border-slate-200 pb-6">
-        <div>
-          <h1 className="text-h2 font-extrabold tracking-tight">Knowledge Hub</h1>
-          <p className="text-body text-slate-400 mt-1">
-            Semantic vector database powered by FAISS (3072d embeddings) · 84 Chunks · 29 Ingested Files
-          </p>
-        </div>
-
-        {/* System Stats Pill */}
-        <div className="flex items-center space-x-3 text-small font-mono">
-          <span className="px-3 py-1 rounded-full dark:bg-[#151D30] bg-slate-100 dark:text-[#7C6CFF] text-[#5B5FFF] font-bold border dark:border-[rgba(255,255,255,0.06)] border-slate-200">
-            Index: FAISS 3072d
-          </span>
-          <span className="px-3 py-1 rounded-full dark:bg-[#151D30] bg-slate-100 text-[#22C55E] font-bold border dark:border-[rgba(255,255,255,0.06)] border-slate-200 flex items-center space-x-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-[#22C55E]" />
-            <span>100% PII Masked</span>
-          </span>
-        </div>
-      </div>
-
-      {/* ─────────────────────────────────────────────────────────────
-          LARGE PERPLEXITY-STYLE RAG SEARCH BAR
-      ───────────────────────────────────────────────────────────── */}
-      <div className="relative rounded-3xl dark:bg-[#0F172A] bg-white border dark:border-[rgba(255,255,255,0.08)] border-slate-200 p-4 sm:p-6 shadow-xl space-y-4">
-        <div className="relative flex items-center">
-          <Search className="w-5 h-5 text-slate-400 absolute left-4 pointer-events-none" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            placeholder="Search vector index semantically (e.g., 'What is the minimum income for a 50 Lakh home loan?')..."
-            className="w-full pl-12 pr-32 py-4 rounded-2xl dark:bg-[#151D30] bg-slate-50 text-body focus:outline-none focus:border-[#5B5FFF] border dark:border-[rgba(255,255,255,0.06)] border-slate-200"
-          />
-          <button
-            onClick={() => handleSearch()}
-            className="absolute right-3 px-5 py-2.5 rounded-xl bg-[#5B5FFF] hover:bg-[#7C6CFF] text-white text-small font-bold transition-all shadow-md flex items-center space-x-1.5"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Search RAG</span>
-          </button>
-        </div>
-
-        {/* Quick Sample Queries */}
-        <div className="flex flex-wrap items-center gap-2 text-small text-slate-400">
-          <span className="font-semibold text-slate-500">Popular queries:</span>
-          {[
-            "Minimum age & income for home loan",
-            "Employer health insurance vs personal plan",
-            "Taglish 15-day free look period",
-            "Indonesia OJK cicilan late fee penalty"
-          ].map((q, idx) => (
+    <section className="page">
+      <PageHeading
+        eyebrow="The source of better answers"
+        title="Knowledge Hub"
+        description="Publish reviewed knowledge. Keep every revision traceable."
+        actions={
+          <>
             <button
-              key={idx}
-              onClick={() => { setSearchQuery(q); handleSearch(q); }}
-              className="px-3 py-1 rounded-lg dark:bg-[#151D30] bg-slate-100 hover:bg-[#5B5FFF]/20 hover:text-[#7C6CFF] text-slate-300 text-[12px] transition-all"
+              className="btn"
+              aria-label="Refresh documents"
+              onClick={() =>
+                selected ? inspect(selected.document) : refresh()
+              }
             >
-              {q}
+              <RefreshCw size={14} />
+              Refresh
             </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ─────────────────────────────────────────────────────────────
-          LIVE RAG SEARCH RESULTS DRAWER (IF SEARCH RUNS)
-      ───────────────────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {searchResults && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="rounded-3xl dark:bg-[#0F172A] bg-white border border-[#5B5FFF]/30 p-6 space-y-4 shadow-2xl"
-          >
-            <div className="flex items-center justify-between border-b dark:border-[rgba(255,255,255,0.06)] border-slate-200 pb-3">
-              <div className="flex items-center space-x-2 text-[#5B5FFF] font-bold">
-                <Sparkles className="w-4 h-4" />
-                <h3 className="text-h3">Semantic Vector Search Results</h3>
-              </div>
-              <span className="text-small font-mono text-slate-400">Query Latency: {searchResults.latency_ms || 280}ms</span>
-            </div>
-
-            {/* Retrieved Chunks */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {searchResults.chunks?.map((chk, idx) => (
-                <div key={idx} className="p-4 rounded-2xl dark:bg-[#151D30] bg-slate-50 border dark:border-[rgba(255,255,255,0.06)] border-slate-200 space-y-2">
-                  <div className="flex items-center justify-between text-small font-bold">
-                    <span className="text-[#5B5FFF] font-mono">{chk.source}</span>
-                    <span className="text-[#22C55E] text-[11px]">74.7% Cosine Match</span>
-                  </div>
-                  <p className="text-small font-mono text-slate-300 leading-relaxed bg-slate-900 p-3 rounded-xl border border-slate-800">
-                    "{chk.content}"
-                  </p>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ─────────────────────────────────────────────────────────────
-          DOCUMENT EXPLORER TABLE (NOTION STYLE)
-      ───────────────────────────────────────────────────────────── */}
-      <div className="rounded-3xl dark:bg-[#0F172A] bg-white border dark:border-[rgba(255,255,255,0.06)] border-slate-200 p-6 space-y-6 shadow-xl">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-h3 font-bold">Ingested Document Repository</h3>
-            <p className="text-small text-slate-400 mt-0.5">29 Files indexed in FAISS vector store with zero PII retention</p>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            {['all', 'india', 'philippines', 'indonesia'].map((cat) => (
+            {canManage && !selected && (
               <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`px-3 py-1.5 rounded-xl text-small font-bold capitalize transition-all ${
-                  activeCategory === cat
-                    ? 'bg-[#5B5FFF] text-white shadow-md'
-                    : 'dark:bg-[#151D30] bg-slate-100 text-slate-400 hover:text-white'
-                }`}
+                className="btn btn-primary"
+                aria-expanded={showUpload}
+                aria-controls="knowledge-upload"
+                onClick={() => setShowUpload((value) => !value)}
               >
-                {cat}
+                <Upload size={14} />
+                {showUpload ? 'Close upload' : 'Upload document'}
               </button>
+            )}
+          </>
+        }
+      >
+        {selected && (
+          <button
+            className="icon-button"
+            aria-label="Back to documents"
+            onClick={() => {
+              detailRequest.current += 1;
+              setSelected(null);
+              setError('');
+            }}
+          >
+            <ArrowLeft size={18} />
+          </button>
+        )}
+      </PageHeading>
+      {error && (
+        <p role="alert" className="text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      )}
+      {listError && (
+        <p role="alert" className="text-red-600 dark:text-red-400">
+          {listError}
+        </p>
+      )}
+      {canManage && jobs.length > 0 && (
+        <details
+          className="panel !p-5"
+          open={jobs.some((job) =>
+            ['queued', 'running', 'retry', 'failed'].includes(job.state)
+          )}
+        >
+          <summary className="cursor-pointer font-semibold">
+            Knowledge jobs ·{' '}
+            {
+              jobs.filter((job) =>
+                ['queued', 'running', 'retry'].includes(job.state)
+              ).length
+            }{' '}
+            pending · {jobs.filter((job) => job.state === 'failed').length}{' '}
+            failed
+          </summary>
+          <p className="text-sm text-muted mt-2">
+            Work is saved and resumes after a restart. Publication and
+            withdrawal take effect when their jobs finish.
+          </p>
+          <div className="mt-4 space-y-3 max-h-72 overflow-y-auto">
+            {jobs.map((job) => {
+              const doc = documents.find((item) => item.id === job.document_id);
+              return (
+                <article
+                  key={job.id}
+                  className="border-t border-slate-200 dark:border-white/10 pt-3 flex flex-wrap justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium break-words">
+                      {doc?.title || 'Document'} · v{doc?.revision || 1} ·{' '}
+                      {
+                        {
+                          process: 'Processing',
+                          publish: 'Publication',
+                          withdraw: 'Withdrawal',
+                        }[job.kind]
+                      }
+                    </p>
+                    <p className="text-xs mt-1 capitalize">
+                      {job.state} · {job.attempts} attempt
+                      {job.attempts === 1 ? '' : 's'}
+                      {job.state === 'retry'
+                        ? ' · Next retry ' +
+                          new Date(job.next_attempt_at).toLocaleTimeString()
+                        : ''}
+                    </p>
+                    {job.error && (
+                      <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                        {job.error}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-2 items-start">
+                    {job.state === 'failed' && (
+                      <button
+                        className={buttonClass}
+                        disabled={jobBusy !== null}
+                        onClick={() => jobAction(job, 'retry')}
+                      >
+                        Retry job
+                      </button>
+                    )}
+                    {job.kind === 'process' &&
+                      ['queued', 'retry', 'failed'].includes(job.state) && (
+                        <button
+                          className={buttonClass}
+                          disabled={jobBusy !== null}
+                          onClick={() => jobAction(job, 'cancel')}
+                        >
+                          Cancel job
+                        </button>
+                      )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </details>
+      )}
+      {selected ? (
+        <div className="panel space-y-5 min-w-0">
+          <div className="flex flex-wrap gap-3 items-start justify-between">
+            <div>
+              <h2 className="text-lg font-semibold break-words">
+                {selectedDoc.title}{' '}
+                <span className="text-muted">
+                  / Revision {selectedDoc.revision || 1}
+                </span>
+              </h2>
+              <p className="text-sm capitalize mt-2">
+                {selectedDoc.market} /{' '}
+                {selectedDoc.product
+                  ? productLabel(selectedDoc.product)
+                  : 'Unclassified product'}{' '}
+                / {selectedDoc.status} /{' '}
+                {selectedDoc.reviewStatus || 'Legacy review state unavailable'}
+              </p>
+            </div>
+            {actions(selectedDoc)}
+          </div>
+          {selectedDoc.contentHash && (
+            <details className="text-xs text-muted">
+              <summary className="cursor-pointer">
+                Revision identity and authorship
+              </summary>
+              <div className="mt-2 space-y-1 break-all">
+                <p>SHA-256: {selectedDoc.contentHash}</p>
+                <p>Revision ID: {selectedDoc.id}</p>
+                <p>
+                  Uploaded {new Date(selectedDoc.createdAt).toLocaleString()} by{' '}
+                  {selectedDoc.createdById}
+                </p>
+                {selectedDoc.approvedAt && (
+                  <p>
+                    Approved {new Date(selectedDoc.approvedAt).toLocaleString()}{' '}
+                    by {selectedDoc.approvedById}
+                  </p>
+                )}
+              </div>
+            </details>
+          )}
+          {selectedDoc.rejectionReason && (
+            <p className="rounded-lg border border-red-300 p-4 text-sm">
+              <strong>Changes requested:</strong> {selectedDoc.rejectionReason}
+            </p>
+          )}
+          {!selectedDoc.product && (
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              This revision has no product classification and is excluded from
+              product-specific agent answers. Create and review a classified
+              revision to use it in those agents.
+            </p>
+          )}
+          {['publishing', 'withdrawing'].includes(selectedDoc.status) && (
+            <p
+              role="status"
+              className="text-sm text-amber-700 dark:text-amber-300"
+            >
+              {selectedDoc.status === 'publishing'
+                ? 'Approval saved. Publication is pending; check the job status above.'
+                : 'Withdrawal requested. This revision may remain searchable until the withdrawal job completes.'}
+            </p>
+          )}
+          {selectedDoc.activeRevision && (
+            <p className="text-sm text-emerald-700 dark:text-emerald-300">
+              Revision {selectedDoc.activeRevision} is currently live.{' '}
+              {selectedDoc.activeRevisionId !== selectedDoc.id &&
+                'This revision is not used to answer questions.'}
+            </p>
+          )}
+          {canManage &&
+            selectedDoc.status === 'ready' &&
+            selectedDoc.reviewStatus === 'pending' && (
+              <div className="rounded-lg border border-amber-300 dark:border-amber-700 p-5 space-y-3">
+                <h3 className="font-semibold">Review this revision</h3>
+                {selectedDoc.createdById === user.id ? (
+                  <p className="text-sm">
+                    Another administrator must review your revision before it
+                    can go live.
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-sm">
+                      Check the content and scope below. Approval replaces the
+                      currently published revision.
+                    </p>
+                    <button
+                      className={buttonClass}
+                      disabled={
+                        busy !== null ||
+                        detailLoading ||
+                        selected.chunks.length === 0
+                      }
+                      onClick={() => action(selectedDoc, 'approve')}
+                    >
+                      <Check size={16} />
+                      Approve and publish revision {selectedDoc.revision}
+                    </button>
+                    <form
+                      className="space-y-2"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        action(selectedDoc, 'reject');
+                      }}
+                    >
+                      <label className="block text-sm space-y-2">
+                        <span>Reason for requesting changes</span>
+                        <textarea
+                          className={inputClass}
+                          value={rejectionReason}
+                          onChange={(event) =>
+                            setRejectionReason(event.target.value)
+                          }
+                          maxLength={2000}
+                          required
+                          rows={2}
+                        />
+                      </label>
+                      <button
+                        className={buttonClass}
+                        disabled={busy !== null || !rejectionReason.trim()}
+                      >
+                        Reject revision
+                      </button>
+                    </form>
+                  </>
+                )}
+              </div>
+            )}
+          <div className="space-y-3">
+            <h3 className="font-semibold">Revision history</h3>
+            <div className="flex flex-wrap gap-2">
+              {revisions
+                .filter((doc) => canManage || doc.status === 'indexed')
+                .map((doc) => (
+                  <button
+                    key={doc.id}
+                    className={
+                      buttonClass +
+                      (doc.id === selectedDoc.id
+                        ? ' !border-emerald-500 bg-emerald-50 dark:bg-emerald-950'
+                        : '')
+                    }
+                    aria-pressed={doc.id === selectedDoc.id}
+                    onClick={() => inspect(doc)}
+                  >
+                    v{doc.revision} ·{' '}
+                    {doc.reviewStatus === 'rejected' ? 'Rejected' : doc.status}
+                  </button>
+                ))}
+            </div>
+          </div>
+          {detailLoading ? (
+            <p role="status">Loading revision...</p>
+          ) : (
+            <div
+              className={'grid gap-6 ' + (comparison ? 'lg:grid-cols-2' : '')}
+            >
+              {comparison && (
+                <div className="signal-tile space-y-4">
+                  <h3 className="font-semibold">
+                    Previous · Revision {comparison.document.revision}
+                  </h3>
+                  <p className="text-sm text-muted">
+                    {comparison.document.title} · {comparison.document.market} ·{' '}
+                    {comparison.document.category}
+                  </p>
+                  {comparison.chunks.length ? (
+                    comparison.chunks.map((chunk) => (
+                      <p
+                        key={chunk.chunk_id}
+                        className="whitespace-pre-wrap break-words text-sm"
+                      >
+                        {chunk.content}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="text-sm">
+                      No retained content available for this revision.
+                    </p>
+                  )}
+                </div>
+              )}
+              <div className="signal-tile space-y-4">
+                <h3 className="font-semibold">
+                  Selected · Revision {selectedDoc.revision}
+                </h3>
+                <p className="text-sm text-muted">
+                  {selectedDoc.title} · {selectedDoc.market} ·{' '}
+                  {selectedDoc.category}
+                </p>
+                {selected.chunks.length === 0 ? (
+                  <p>No processed content available.</p>
+                ) : (
+                  selected.chunks.map((chunk) => (
+                    <article key={chunk.chunk_id} className="space-y-2">
+                      <p className="whitespace-pre-wrap break-words text-sm">
+                        {chunk.content}
+                      </p>
+                      <p className="font-mono text-xs break-all text-muted">
+                        {chunk.chunk_id}
+                      </p>
+                    </article>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="metrics-strip stats-three">
+            {[
+              ['Documents', latest.length],
+              [
+                'Published revisions',
+                documents.filter((doc) => doc.status === 'indexed').length,
+              ],
+              [
+                'Awaiting review',
+                latest.filter(
+                  (doc) =>
+                    doc.status === 'ready' && doc.reviewStatus === 'pending'
+                ).length,
+              ],
+            ].map(([label, value]) => (
+              <div key={label} className="metric">
+                <p className="metric-label">{label}</p>
+                <p className="metric-value">{loading ? '…' : value}</p>
+              </div>
             ))}
           </div>
-        </div>
-
-        {/* Modern Notion-Style Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-body border-collapse">
-            <thead>
-              <tr className="border-b dark:border-[rgba(255,255,255,0.06)] border-slate-200 text-small text-slate-400 uppercase tracking-wider">
-                <th className="py-3 px-4 font-bold">Document Name</th>
-                <th className="py-3 px-4 font-bold">Market / Territory</th>
-                <th className="py-3 px-4 font-bold">Category</th>
-                <th className="py-3 px-4 font-bold">Vector Chunks</th>
-                <th className="py-3 px-4 font-bold">PII Status</th>
-                <th className="py-3 px-4 font-bold text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y dark:divide-[rgba(255,255,255,0.04)] divide-slate-100">
-              {documents.map((doc) => (
-                <tr key={doc.id} className="hover:bg-[#5B5FFF]/5 transition-colors group">
-                  <td className="py-4 px-4 font-mono font-bold text-white flex items-center space-x-2">
-                    <FileText className="w-4 h-4 text-[#5B5FFF]" />
-                    <span>{doc.title}</span>
-                  </td>
-                  <td className="py-4 px-4 text-small text-slate-300">{doc.market}</td>
-                  <td className="py-4 px-4 text-small text-slate-400">{doc.category}</td>
-                  <td className="py-4 px-4 font-mono text-small text-[#7C6CFF] font-bold">{doc.chunksCount} chunks ({doc.vectorDim})</td>
-                  <td className="py-4 px-4">
-                    <span className="px-2.5 py-1 rounded-full bg-[#22C55E]/15 text-[#22C55E] text-[11px] font-bold inline-flex items-center space-x-1">
-                      <ShieldCheck className="w-3 h-3" />
-                      <span>{doc.piiStatus}</span>
-                    </span>
-                  </td>
-                  <td className="py-4 px-4 text-right">
-                    <button
-                      onClick={() => setSelectedChunk(doc)}
-                      className="px-3 py-1.5 rounded-lg bg-[#5B5FFF]/15 hover:bg-[#5B5FFF] text-[#7C6CFF] hover:text-white text-small font-bold transition-all flex items-center space-x-1 ml-auto"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>Inspect Chunks</span>
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* ─────────────────────────────────────────────────────────────
-          CHUNK INSPECTION DRAWER (IF SELECTED)
-      ───────────────────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {selectedChunk && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            className="rounded-3xl dark:bg-[#0F172A] bg-white border border-[#5B5FFF] p-6 space-y-4 shadow-2xl"
-          >
-            <div className="flex items-center justify-between border-b dark:border-[rgba(255,255,255,0.06)] border-slate-200 pb-3">
-              <div>
-                <h3 className="text-h3 font-bold font-mono text-[#5B5FFF]">{selectedChunk.title}</h3>
-                <span className="text-small text-slate-400">FAISS Index Vector Metadata Inspector</span>
+          {canManage && showUpload && (
+            <form
+              id="knowledge-upload"
+              key={revisionTarget?.id || 'new'}
+              onSubmit={upload}
+              className="form-panel space-y-5"
+            >
+              <h2 className="text-lg font-semibold">
+                {revisionTarget
+                  ? `New revision of ${revisionTarget.title}`
+                  : 'Upload Document'}
+              </h2>
+              {revisionTarget && (
+                <p className="text-sm text-muted">
+                  Upload the replacement file. The published revision stays live
+                  until a different administrator approves this update.
+                </p>
+              )}
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <label className="text-sm space-y-2">
+                  <span>Title</span>
+                  <input
+                    name="title"
+                    defaultValue={revisionTarget?.title || ''}
+                    required
+                    maxLength={180}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="text-sm space-y-2">
+                  <span>Market</span>
+                  <select
+                    name="market"
+                    defaultValue={revisionTarget?.market || 'india'}
+                    className={inputClass}
+                  >
+                    {markets.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm space-y-2">
+                  <span>Product scope</span>
+                  <select
+                    name="product"
+                    required
+                    defaultValue={revisionTarget?.product || ''}
+                    className={inputClass}
+                  >
+                    <option value="">Choose a product</option>
+                    {[
+                      ...new Set([
+                        ...products,
+                        ...(revisionTarget?.product
+                          ? [revisionTarget.product]
+                          : []),
+                      ]),
+                    ].map((value) => (
+                      <option key={value} value={value}>
+                        {productLabel(value)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm space-y-2">
+                  <span>Category</span>
+                  <input
+                    name="category"
+                    defaultValue={revisionTarget?.category || 'policy'}
+                    required
+                    maxLength={80}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="text-sm space-y-2">
+                  <span>File (PDF, TXT, MD; max 5 MB)</span>
+                  <input
+                    name="file"
+                    type="file"
+                    accept=".pdf,.txt,.md"
+                    required
+                    className="block w-full min-w-0 text-sm"
+                  />
+                </label>
               </div>
-              <button
-                onClick={() => setSelectedChunk(null)}
-                className="px-3 py-1 rounded-lg bg-slate-800 text-slate-300 text-small font-bold"
+              <div className="flex gap-2">
+                <button
+                  className="btn btn-primary"
+                  type="submit"
+                  disabled={uploading}
+                >
+                  <Upload size={16} />
+                  {uploading
+                    ? 'Uploading...'
+                    : revisionTarget
+                      ? 'Upload revision'
+                      : 'Upload'}
+                </button>
+                {revisionTarget && (
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    disabled={uploading}
+                    onClick={() => setRevisionTarget(null)}
+                  >
+                    Cancel revision
+                  </button>
+                )}
+              </div>
+            </form>
+          )}
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-3 justify-between items-center">
+              <h2 className="text-lg font-semibold">
+                Workspace documents{' '}
+                <span className="text-sm font-normal">({latest.length})</span>
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  aria-label="Filter documents"
+                  placeholder="Find document"
+                  value={filter}
+                  onChange={(event) => setFilter(event.target.value)}
+                  className={inputClass + ' sm:!w-56'}
+                />
+                <select
+                  aria-label="Document status"
+                  value={status}
+                  onChange={(event) => setStatus(event.target.value)}
+                  className={inputClass + ' sm:!w-40'}
+                >
+                  {[
+                    'all',
+                    'uploaded',
+                    'processing',
+                    'ready',
+                    'publishing',
+                    'indexed',
+                    'withdrawing',
+                    'rejected',
+                    'failed',
+                    'archived',
+                  ].map((value) => (
+                    <option key={value} value={value}>
+                      {value === 'all' ? 'All statuses' : value}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {loading ? (
+              <div className="panel">
+                <LoadingState label="Loading documents" />
+              </div>
+            ) : visible.length === 0 ? (
+              <div className="panel">
+                <EmptyState
+                  icon={BookOpen}
+                  title={
+                    filter || status !== 'all'
+                      ? 'No matching documents'
+                      : 'Build a trusted knowledge library'
+                  }
+                >
+                  {filter || status !== 'all'
+                    ? 'Try another search or status filter.'
+                    : canManage
+                      ? 'Upload a document, check its content, and have another administrator review it before publication.'
+                      : 'Published knowledge will appear here once your administrators have reviewed it.'}
+                </EmptyState>
+              </div>
+            ) : (
+              <div className="data-table">
+                <table className="w-full text-sm text-left">
+                  <thead className="border-b border-slate-300 dark:border-white/20">
+                    <tr>
+                      {[
+                        'Document',
+                        'Market',
+                        'Status',
+                        'Chunks',
+                        'PII signal',
+                        'Actions',
+                      ].map((value) => (
+                        <th key={value} className="p-3 font-medium">
+                          {value}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visible.map((doc) => (
+                      <tr
+                        key={doc.id}
+                        className="border-b border-slate-200 dark:border-white/10"
+                      >
+                        <td className="p-3 min-w-48 max-w-80 break-words">
+                          <p className="font-medium">{doc.title}</p>
+                          <p className="text-xs text-muted break-all">
+                            {doc.filename}
+                          </p>
+                          <p className="text-xs mt-1">
+                            Revision {doc.revision || 1}
+                            {doc.activeRevision && (
+                              <span className="text-emerald-700 dark:text-emerald-300">
+                                {' '}
+                                · v{doc.activeRevision} live
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs mt-1 capitalize">
+                            {doc.product
+                              ? productLabel(doc.product)
+                              : 'Unclassified product'}
+                          </p>
+                          {doc.rejectionReason && (
+                            <p className="text-xs text-red-600 mt-1">
+                              Changes requested: {doc.rejectionReason}
+                            </p>
+                          )}
+                          {doc.error && (
+                            <p className="text-red-600 dark:text-red-400 mt-2">
+                              {doc.error}
+                            </p>
+                          )}
+                        </td>
+                        <td className="p-3 capitalize">{doc.market}</td>
+                        <td className="p-3">
+                          <StatusBadge
+                            tone={
+                              doc.status === 'indexed'
+                                ? 'success'
+                                : doc.status === 'failed' ||
+                                    doc.reviewStatus === 'rejected'
+                                  ? 'error'
+                                  : [
+                                        'ready',
+                                        'publishing',
+                                        'processing',
+                                        'withdrawing',
+                                      ].includes(doc.status)
+                                    ? 'warning'
+                                    : 'neutral'
+                            }
+                          >
+                            {doc.reviewStatus === 'rejected'
+                              ? 'Rejected'
+                              : doc.status}
+                          </StatusBadge>
+                          {doc.status === 'ready' &&
+                            doc.reviewStatus === 'pending' && (
+                              <span className="block text-[10px] text-muted mt-2">
+                                Awaiting approval
+                              </span>
+                            )}
+                        </td>
+                        <td className="p-3">{doc.chunks}</td>
+                        <td className="p-3">
+                          {doc.piiDetected === null
+                            ? 'Pending'
+                            : doc.piiDetected
+                              ? 'Detected, unmasked'
+                              : 'Not detected'}
+                        </td>
+                        <td className="p-3">
+                          <div className="flex flex-wrap gap-2">
+                            {(canManage || doc.status === 'indexed') && (
+                              <button
+                                className={buttonClass}
+                                title="Review revision and history"
+                                aria-label={'Inspect ' + doc.title}
+                                onClick={() => inspect(doc)}
+                              >
+                                <Eye size={16} />
+                                Review
+                              </button>
+                            )}
+                            {!canManage &&
+                              doc.activeRevisionId &&
+                              doc.status !== 'indexed' && (
+                                <button
+                                  className={buttonClass}
+                                  onClick={() =>
+                                    inspect(
+                                      documents.find(
+                                        (item) =>
+                                          item.id === doc.activeRevisionId
+                                      )
+                                    )
+                                  }
+                                >
+                                  View live revision
+                                </button>
+                              )}
+                            {actions(doc)}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          <div className="panel space-y-4">
+            <div>
+              <h2 className="panel-title">Test your knowledge</h2>
+              <p className="panel-description">
+                Ask a question to inspect the sources available for a market and
+                product.
+              </p>
+            </div>
+            <form onSubmit={search} className="flex flex-wrap gap-3">
+              <input
+                aria-label="Knowledge query"
+                placeholder="Ask a policy question"
+                required
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                className={inputClass + ' flex-1 !w-auto basis-64'}
+              />
+              <select
+                aria-label="Retrieval market"
+                value={market}
+                onChange={(event) => setMarket(event.target.value)}
+                className={inputClass + ' !w-auto'}
               >
-                Close
+                {markets.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Retrieval product"
+                value={product}
+                onChange={(event) => setProduct(event.target.value)}
+                className={inputClass + ' !w-auto'}
+              >
+                <option value="">All products</option>
+                {products
+                  .filter((value) => value !== 'general')
+                  .map((value) => (
+                    <option key={value} value={value}>
+                      {productLabel(value)}
+                    </option>
+                  ))}
+              </select>
+              <button
+                className="btn btn-primary"
+                title="Search knowledge"
+                aria-label="Search knowledge"
+                disabled={searching || !query.trim()}
+              >
+                <Search size={16} />
+                Search
               </button>
-            </div>
-
-            <div className="space-y-2">
-              <span className="text-small font-bold text-slate-400 uppercase tracking-wider block">Raw Embedded Text Chunk:</span>
-              <div className="p-4 rounded-2xl dark:bg-[#070B14] bg-slate-900 text-slate-200 font-mono text-small leading-relaxed border border-slate-800">
-                "{selectedChunk.sampleSnippet}"
+            </form>
+            {searching && <p role="status">Retrieving...</p>}
+            {searchError && (
+              <p role="alert" className="text-red-600 dark:text-red-400">
+                {searchError}
+              </p>
+            )}
+            {result && (
+              <div className="space-y-4">
+                <p className="break-words">{result.answer}</p>
+                <p className="text-sm">
+                  {result.sources?.length || 0} sources /{' '}
+                  {result.latency_ms ?? '-'} ms
+                </p>
+                {result.sources?.map((source, index) => (
+                  <article
+                    key={source.chunk_id || index}
+                    className="border-l-2 border-emerald-500 pl-4 space-y-1 break-words"
+                  >
+                    <h3 className="font-medium">
+                      {source.title || source.source}
+                    </h3>
+                    {source.revision && (
+                      <p className="text-xs">Revision {source.revision}</p>
+                    )}
+                    {source.product && (
+                      <p className="text-xs capitalize">
+                        {productLabel(source.product)}
+                      </p>
+                    )}
+                    <p className="text-xs font-mono break-all">
+                      {source.chunk_id}
+                    </p>
+                    <p className="text-sm">{source.excerpt}</p>
+                  </article>
+                ))}
               </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-    </div>
+            )}
+          </div>
+        </>
+      )}
+    </section>
   );
 }

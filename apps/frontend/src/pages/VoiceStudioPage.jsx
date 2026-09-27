@@ -1,204 +1,86 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useReducedMotion } from 'framer-motion';
 import {
-  Mic, MicOff, PhoneOff, Phone, Sparkles, FileText, Database,
-  Send, Volume2, Activity, Zap, CheckCircle2, AlertCircle, Globe,
-  ArrowRight, Signal, Timer, ChevronDown
-} from 'lucide-react';
+  EmptyState,
+  PageHeading,
+  StatusBadge,
+} from '../components/WorkspaceUI';
+import { Mic, PhoneOff, Phone, Send, CheckCircle2, Globe } from 'lucide-react';
 import { io as socketIO } from 'socket.io-client';
 
 // ─── Market Profiles ──────────────────────────────────────────
 const MARKETS = {
-  'india-loan':       { flag: '🇮🇳', name: 'India Loans',      agent: 'Aria',  lang: 'en-IN', color: '#5B5FFF' },
-  'india-insurance':  { flag: '🇮🇳', name: 'India Insurance',   agent: 'Priya', lang: 'en-IN', color: '#7C6CFF' },
-  'ph-bancassurance': { flag: '🇵🇭', name: 'Philippines',       agent: 'Maria', lang: 'en-PH', color: '#06B6D4' },
-  'id-finance':       { flag: '🇮🇩', name: 'Indonesia',         agent: 'Dewi',  lang: 'id',    color: '#10B981' },
+  'india-loan': { name: 'India Loans', agent: 'Aria', lang: 'en-IN' },
+  'india-insurance': { name: 'India Insurance', agent: 'Priya', lang: 'en-IN' },
+  'ph-bancassurance': { name: 'Philippines', agent: 'Maria', lang: 'en-PH' },
+  'id-finance': {
+    name: 'Indonesia',
+    agent: 'Dewi',
+    lang: 'id',
+    color: '#10B981',
+  },
 };
 
-// ─── Pipeline Stage Labels ────────────────────────────────────
-const PIPELINE_STAGES = [
-  { id: 'asr',     label: 'Streaming ASR',    icon: Mic },
-  { id: 'gateway', label: 'API Gateway',       icon: Signal },
-  { id: 'rag',     label: 'FastAPI RAG',       icon: Database },
-  { id: 'llm',     label: 'Gemini LLM',        icon: Sparkles },
-  { id: 'tts',     label: 'TTS Synthesis',     icon: Volume2 },
-];
-
-// ─── Voice Waveform Visualizer ────────────────────────────────
-function VoiceOrb({ isActive, isSpeaking, volumeLevel = 0 }) {
-  const bars = 32;
+function VoiceWave({ level, active }) {
+  const reduced = useReducedMotion();
   return (
-    <div className="relative flex items-center justify-center w-40 h-40">
-      {/* Outer pulse rings */}
-      {isActive && (
-        <>
-          <motion.div
-            className="absolute inset-0 rounded-full border border-[#5B5FFF]/30"
-            animate={{ scale: [1, 1.25, 1], opacity: [0.4, 0, 0.4] }}
-            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-          />
-          <motion.div
-            className="absolute inset-0 rounded-full border border-[#5B5FFF]/20"
-            animate={{ scale: [1, 1.5, 1], opacity: [0.3, 0, 0.3] }}
-            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut', delay: 0.4 }}
-          />
-        </>
-      )}
-
-      {/* Waveform ring */}
-      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 160 160">
-        {Array.from({ length: bars }).map((_, i) => {
-          const angle = (i / bars) * Math.PI * 2 - Math.PI / 2;
-          const r = 60;
-          const cx = 80 + Math.cos(angle) * r;
-          const cy = 80 + Math.sin(angle) * r;
-          const barH = isActive ? 4 + Math.random() * volumeLevel * 20 : 2;
-          return (
-            <motion.rect
-              key={i}
-              x={cx - 1}
-              y={cy - barH / 2}
-              width={2}
-              height={barH}
-              rx={1}
-              fill={isActive ? '#5B5FFF' : '#334155'}
-              animate={{ height: isActive ? [barH, barH * 1.5, barH] : 2 }}
-              transition={{ duration: 0.3 + Math.random() * 0.4, repeat: Infinity, delay: i * 0.02 }}
-              transform={`rotate(${(i / bars) * 360}, ${cx}, ${cy})`}
-            />
-          );
-        })}
-      </svg>
-
-      {/* Core orb */}
-      <motion.div
-        animate={{
-          scale: isActive ? (isSpeaking ? [1, 1.08, 1] : [1, 1.03, 1]) : 1,
-          boxShadow: isActive
-            ? ['0 0 30px rgba(91,95,255,0.5)', '0 0 60px rgba(91,95,255,0.8)', '0 0 30px rgba(91,95,255,0.5)']
-            : '0 0 0px rgba(91,95,255,0)',
-        }}
-        transition={{ duration: 1.5, repeat: Infinity }}
-        className={`relative z-10 w-20 h-20 rounded-full flex items-center justify-center transition-all duration-500 ${
-          isActive
-            ? 'bg-gradient-to-tr from-[#5B5FFF] via-[#7C6CFF] to-[#A78BFA]'
-            : 'dark:bg-slate-800 bg-slate-200'
-        }`}
-      >
-        {isActive ? (
-          <motion.div
-            animate={{ scale: [1, 1.1, 1] }}
-            transition={{ duration: 0.8, repeat: Infinity }}
-          >
-            <Volume2 className="w-8 h-8 text-white" />
-          </motion.div>
-        ) : (
-          <Mic className="w-8 h-8 dark:text-slate-400 text-slate-500" />
-        )}
-      </motion.div>
+    <div className="voice-wave" aria-hidden="true">
+      {Array.from({ length: 29 }, (_, i) => (
+        <i
+          key={i}
+          style={{
+            transform: `scaleY(${active && !reduced ? 0.2 + Math.min(1, level) * (1 + Math.sin(i * 0.9)) * 1.5 : 0.12 + Math.abs(Math.sin(i * 0.8)) * 0.25})`,
+          }}
+        />
+      ))}
     </div>
   );
 }
-
-// ─── Pipeline Flow Indicator ──────────────────────────────────
-function PipelineFlow({ activeStage, latencies }) {
-  return (
-    <div className="flex items-center gap-1 flex-wrap justify-center">
-      {PIPELINE_STAGES.map((stage, i) => {
-        const Icon = stage.icon;
-        const isActive = activeStage === stage.id;
-        const isDone = PIPELINE_STAGES.findIndex(s => s.id === activeStage) > i;
-        return (
-          <React.Fragment key={stage.id}>
-            <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all duration-300 ${
-              isActive
-                ? 'bg-[#5B5FFF] text-white shadow-[0_0_12px_rgba(91,95,255,0.4)]'
-                : isDone
-                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                : 'dark:bg-slate-800/60 bg-slate-100 dark:text-slate-500 text-slate-400'
-            }`}>
-              <Icon className="w-3 h-3" />
-              <span>{stage.label}</span>
-              {isDone && latencies?.[stage.id] && (
-                <span className="font-mono text-[10px] opacity-70">{latencies[stage.id]}ms</span>
-              )}
-            </div>
-            {i < PIPELINE_STAGES.length - 1 && (
-              <ArrowRight className={`w-3 h-3 flex-shrink-0 ${isDone || isActive ? 'text-[#5B5FFF]' : 'dark:text-slate-700 text-slate-300'}`} />
-            )}
-          </React.Fragment>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Message Bubble ───────────────────────────────────────────
 function MessageBubble({ msg }) {
   const isUser = msg.role === 'user';
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.25, ease: 'easeOut' }}
-      className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
-    >
-      <div className="flex items-center gap-2 mb-1 px-1">
-        <span className="text-[11px] font-semibold dark:text-slate-500 text-slate-400">
-          {isUser ? 'Customer' : msg.agentName || 'Veyra Agent'}
+    <article className={`message ${isUser ? 'message-customer' : ''}`}>
+      <div className="message-meta">
+        <span className="font-semibold">
+          {isUser ? 'Customer' : msg.agentName || 'Veyra agent'}
         </span>
-        {msg.latency_ms && (
-          <span className="text-[10px] font-mono text-emerald-500 flex items-center gap-0.5">
-            <Zap className="w-2.5 h-2.5" />{msg.latency_ms}ms
-          </span>
+        {msg.ts && (
+          <time>
+            {new Date(msg.ts).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </time>
         )}
-        {msg.isPartial && (
-          <span className="text-[10px] text-amber-400 italic">transcribing…</span>
-        )}
+        {msg.isPartial && <span>Transcribing…</span>}
       </div>
-
-      <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-[14px] leading-relaxed ${
-        isUser
-          ? 'bg-[#5B5FFF] text-white rounded-tr-sm'
-          : 'dark:bg-[#151D30] bg-slate-100 dark:text-white text-slate-900 rounded-tl-sm border dark:border-white/5 border-slate-200'
-      }`}>
-        {msg.content}
-        {msg.isPartial && <span className="animate-pulse ml-1">▌</span>}
-      </div>
-
-      {/* RAG Citation */}
-      {!isUser && msg.sources && msg.sources.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          transition={{ delay: 0.2 }}
-          className="mt-2 max-w-[85%] w-full rounded-xl border dark:border-white/5 border-slate-200 dark:bg-[#070B14] bg-slate-50 overflow-hidden"
-        >
-          <div className="flex items-center justify-between px-3 py-2 border-b dark:border-white/5 border-slate-200">
-            <span className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-400">
-              <Database className="w-3 h-3" />
-              RAG Knowledge Citation
-            </span>
-            <span className="text-[10px] font-mono text-emerald-300">
-              {((msg.sources[0]?.score || 0.9) * 100).toFixed(1)}% match
-            </span>
-          </div>
-          <div className="px-3 py-2 space-y-1">
-            <div className="flex items-center gap-1.5">
-              <FileText className="w-3 h-3 text-[#5B5FFF] flex-shrink-0" />
-              <span className="text-[11px] font-semibold dark:text-white text-slate-700 truncate">
-                {msg.sources[0]?.source || 'loan_qualification_rules.txt'}
-              </span>
+      <p className="message-content">{msg.content}</p>
+      {!isUser &&
+        msg.sources?.map((source, index) => (
+          <details key={source.chunk_id || index} className="source-detail">
+            <summary>
+              Source {index + 1} ·{' '}
+              {source.title || source.source || 'Knowledge document'}
+            </summary>
+            <div className="mt-3 space-y-2 text-muted">
+              {source.revision && <p>Revision {source.revision}</p>}
+              {source.document_id && (
+                <p className="break-all text-[10px]">{source.document_id}</p>
+              )}
+              {(source.excerpt || source.content) && (
+                <p className="whitespace-pre-wrap">
+                  {source.excerpt || source.content}
+                </p>
+              )}
+              {source.chunk_id && (
+                <p className="font-mono text-[10px] break-all">
+                  {source.chunk_id}
+                </p>
+              )}
             </div>
-            {(msg.sources[0]?.excerpt || msg.sources[0]?.content) && (
-              <p className="text-[11px] font-mono dark:text-slate-400 text-slate-500 dark:bg-black/30 bg-slate-200 px-2 py-1.5 rounded-lg line-clamp-2">
-                "{msg.sources[0].excerpt || msg.sources[0].content}"
-              </p>
-            )}
-          </div>
-        </motion.div>
-      )}
-    </motion.div>
+          </details>
+        ))}
+    </article>
   );
 }
 
@@ -228,10 +110,11 @@ export default function VoiceStudioPage() {
   const micStreamRef = useRef(null);
   const isProcessingRef = useRef(false);
   const callStateRef = useRef('idle'); // mirror of callState for event handlers
-  const isSpeakingRef = useRef(false);  // mirror of isSpeaking
+  const isSpeakingRef = useRef(false); // mirror of isSpeaking
   const requestAbortRef = useRef(null);
   const stageTimerRef = useRef(null);
   const sessionIdRef = useRef(null);
+  const [hasSession, setHasSession] = useState(false);
   const socketRef = useRef(null);
   const chatEndRef = useRef(null);
 
@@ -244,21 +127,28 @@ export default function VoiceStudioPage() {
     const response = await fetch('/api/voice/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ market, language: MARKETS[market]?.lang || 'en-IN' }),
+      body: JSON.stringify({
+        market,
+        language: MARKETS[market]?.lang || 'en-IN',
+      }),
     });
     if (!response.ok) {
       const detail = await response.json().catch(() => null);
-      throw new Error(detail?.message || detail?.error || 'Unable to create a voice session');
+      throw new Error(
+        detail?.message || detail?.error || 'Unable to create a voice session'
+      );
     }
     const data = await response.json();
     sessionIdRef.current = data.call_id;
+    setHasSession(true);
     socketRef.current?.emit('monitor:call', { call_id: data.call_id });
     return data.call_id;
   }, [market]);
 
   // ── Scroll to bottom on new messages ──
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = chatEndRef.current?.parentElement;
+    if (container) container.scrollTop = container.scrollHeight;
   }, [messages, partialTranscript]);
 
   // ── Socket.IO for server-side pipeline events ──
@@ -269,7 +159,11 @@ export default function VoiceStudioPage() {
     const socket = socketIO({ path: '/socket.io', transports: ['websocket'] });
     socketRef.current = socket;
     socket.on('pipeline:latency', (data) => {
-      setLatencies(prev => ({ ...prev, rag: data.rag_ms, gateway: data.total_ms - data.rag_ms }));
+      setLatencies((prev) => ({
+        ...prev,
+        rag: data.rag_ms,
+        gateway: data.total_ms - data.rag_ms,
+      }));
       setTotalCallLatency(data.total_ms);
     });
     return () => socket.disconnect();
@@ -282,13 +176,15 @@ export default function VoiceStudioPage() {
   useEffect(() => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
-      setError('Voice input requires Chrome or Edge browser. Use Text Mode on other browsers.');
+      setError(
+        'Voice input requires Chrome or Edge browser. Use Text Mode on other browsers.'
+      );
       setUseTextMode(true);
       return;
     }
 
     const recognition = new SR();
-    recognition.continuous = true;   // Listen continuously without stopping at short pauses
+    recognition.continuous = true; // Listen continuously without stopping at short pauses
     recognition.interimResults = true;
     recognition.lang = MARKETS[market]?.lang || 'en-IN';
     recognition.maxAlternatives = 1;
@@ -313,10 +209,13 @@ export default function VoiceStudioPage() {
       if (!fullTranscript) return;
 
       // Append to accumulated speech for this turn
-      if (!accumulatedSpeechRef.current || fullTranscript.length > accumulatedSpeechRef.current.length) {
+      if (
+        !accumulatedSpeechRef.current ||
+        fullTranscript.length > accumulatedSpeechRef.current.length
+      ) {
         accumulatedSpeechRef.current = fullTranscript;
       }
-      
+
       setPartialTranscript(accumulatedSpeechRef.current);
 
       // Reset silence debounce timer: submit query 1400ms after user finishes sentence
@@ -324,7 +223,12 @@ export default function VoiceStudioPage() {
 
       silenceTimerRef.current = setTimeout(() => {
         const finalQuery = accumulatedSpeechRef.current.trim();
-        if (finalQuery && finalQuery.length > 2 && !isProcessingRef.current && !isSpeakingRef.current) {
+        if (
+          finalQuery &&
+          finalQuery.length > 2 &&
+          !isProcessingRef.current &&
+          !isSpeakingRef.current
+        ) {
           isProcessingRef.current = true;
           setPartialTranscript('');
           processVoiceQuery(finalQuery);
@@ -335,9 +239,15 @@ export default function VoiceStudioPage() {
     recognition.onend = () => {
       setIsListening(false);
       // Auto-restart recognition if call is active and agent is done speaking
-      if (callStateRef.current === 'active' && !isProcessingRef.current && !isSpeakingRef.current) {
+      if (
+        callStateRef.current === 'active' &&
+        !isProcessingRef.current &&
+        !isSpeakingRef.current
+      ) {
         setTimeout(() => {
-          try { recognition.start(); } catch (_) {}
+          try {
+            recognition.start();
+          } catch (_) {}
         }, 300);
       }
     };
@@ -346,18 +256,24 @@ export default function VoiceStudioPage() {
       if (event.error === 'no-speech' || event.error === 'aborted') return;
       console.warn('SpeechRecognition notice:', event.error);
       if (event.error === 'not-allowed') {
-        setError('🎤 Microphone access denied. Click the lock icon in the address bar → allow microphone.');
+        setError(
+          'Microphone access denied. Click the lock icon in the address bar → allow microphone.'
+        );
         setCallState('idle');
         callStateRef.current = 'idle';
       } else if (event.error === 'network') {
-        setError('Voice recognition is unavailable. Check your internet connection or use Text Mode.');
+        setError(
+          'Voice recognition is unavailable. Check your internet connection or use Text Mode.'
+        );
       }
     };
 
     recognitionRef.current = recognition;
     return () => {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      try { recognition.abort(); } catch (_) {}
+      try {
+        recognition.abort();
+      } catch (_) {}
       if (recognitionRef.current === recognition) recognitionRef.current = null;
     };
   }, [market]);
@@ -365,7 +281,10 @@ export default function VoiceStudioPage() {
   // ── Mic AudioContext: real volume visualization ──
   const startMicVisualization = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: false,
+      });
       micStreamRef.current = stream;
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
       const source = ctx.createMediaStreamSource(stream);
@@ -390,7 +309,7 @@ export default function VoiceStudioPage() {
 
   const stopMicVisualization = useCallback(() => {
     cancelAnimationFrame(animFrameRef.current);
-    micStreamRef.current?.getTracks().forEach(t => t.stop());
+    micStreamRef.current?.getTracks().forEach((t) => t.stop());
     audioCtxRef.current?.close();
     audioCtxRef.current = null;
     analyserRef.current = null;
@@ -398,139 +317,198 @@ export default function VoiceStudioPage() {
     setVolumeLevel(0);
   }, []);
 
-  useEffect(() => () => {
-    callStateRef.current = 'idle';
-    requestAbortRef.current?.abort();
-    window.speechSynthesis?.cancel();
-    stopMicVisualization();
-  }, [stopMicVisualization]);
+  useEffect(
+    () => () => {
+      callStateRef.current = 'idle';
+      requestAbortRef.current?.abort();
+      window.speechSynthesis?.cancel();
+      stopMicVisualization();
+    },
+    [stopMicVisualization]
+  );
 
   // ── Core: send query to RAG, stream TTS back ──
-  const processVoiceQuery = useCallback(async (query) => {
-    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    // Do not let the recognizer hear the browser's own TTS response. It will be
-    // restarted once this turn has finished.
-    try { recognitionRef.current?.stop(); } catch (_) {}
-    setMessages(prev => [...prev, { id: `usr-${Date.now()}`, role: 'user', content: query, ts: new Date().toISOString() }]);
-    setActiveStage('gateway');
-    if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
-    stageTimerRef.current = setTimeout(() => setActiveStage('rag'), 100);
+  const processVoiceQuery = useCallback(
+    async (query) => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      // Do not let the recognizer hear the browser's own TTS response. It will be
+      // restarted once this turn has finished.
+      try {
+        recognitionRef.current?.stop();
+      } catch (_) {}
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `usr-${Date.now()}`,
+          role: 'user',
+          content: query,
+          ts: new Date().toISOString(),
+        },
+      ]);
+      setActiveStage('gateway');
+      if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
+      stageTimerRef.current = setTimeout(() => setActiveStage('rag'), 100);
 
-    const controller = new AbortController();
-    requestAbortRef.current?.abort();
-    requestAbortRef.current = controller;
+      const controller = new AbortController();
+      requestAbortRef.current?.abort();
+      requestAbortRef.current = controller;
 
-    try {
-      const t0 = Date.now();
-      const callId = await ensureSession();
-      const res = await fetch('/api/voice/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query,
-          top_k: 2,
-          call_id: callId,
-          market,
-          language: MARKETS[market]?.lang || 'en-IN',
-        }),
-        signal: controller.signal,
-      });
-      if (!res.ok) {
-        const detail = await res.json().catch(() => null);
-        throw new Error(detail?.message || detail?.error || `RAG HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      const ragMs = Date.now() - t0;
+      try {
+        const t0 = Date.now();
+        const callId = await ensureSession();
+        const res = await fetch('/api/voice/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query,
+            top_k: 2,
+            call_id: callId,
+            market,
+            language: MARKETS[market]?.lang || 'en-IN',
+          }),
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          const detail = await res.json().catch(() => null);
+          throw new Error(
+            detail?.message || detail?.error || `RAG HTTP ${res.status}`
+          );
+        }
+        const data = await res.json();
+        const ragMs = Date.now() - t0;
 
-      setActiveStage('llm');
-      setTotalCallLatency(data.latency_ms || ragMs);
-      setLatencies(prev => ({ ...prev, rag: data.retrieval_latency_ms, llm: data.llm_latency_ms, gateway: ragMs - (data.latency_ms || 0) }));
+        setActiveStage('llm');
+        setTotalCallLatency(data.latency_ms || ragMs);
+        setLatencies((prev) => ({
+          ...prev,
+          rag: data.retrieval_latency_ms,
+          llm: data.llm_latency_ms,
+          gateway: ragMs - (data.latency_ms || 0),
+        }));
 
-      const answer = data.answer || 'I could not find that information in the knowledge base.';
-      setMessages(prev => [...prev, {
-        id: `agt-${Date.now()}`,
-        role: 'assistant',
-        content: answer,
-        sources: data.sources || [],
-        latency_ms: data.latency_ms || ragMs,
-        agentName: `${MARKETS[market]?.agent || 'Veyra'} (Veyra)`,
-        ts: new Date().toISOString(),
-      }]);
+        const answer =
+          data.answer ||
+          'I could not find that information in the knowledge base.';
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `agt-${Date.now()}`,
+            role: 'assistant',
+            content: answer,
+            sources: data.sources || [],
+            latency_ms: data.latency_ms || ragMs,
+            agentName: `${MARKETS[market]?.agent || 'Veyra'} (Veyra)`,
+            ts: new Date().toISOString(),
+          },
+        ]);
 
-      // ── TTS: speak the answer ──
-      setActiveStage('tts');
-      setIsSpeaking(true);
-      isSpeakingRef.current = true;
-      if (!window.speechSynthesis || typeof window.SpeechSynthesisUtterance === 'undefined') {
-        throw new Error('Text-to-speech is not available in this browser. Use Chrome or Edge.');
-      }
-      window.speechSynthesis.cancel(); // clear any queued speech
+        // ── TTS: speak the answer ──
+        setActiveStage('tts');
+        setIsSpeaking(true);
+        isSpeakingRef.current = true;
+        if (
+          !window.speechSynthesis ||
+          typeof window.SpeechSynthesisUtterance === 'undefined'
+        ) {
+          throw new Error(
+            'Text-to-speech is not available in this browser. Use Chrome or Edge.'
+          );
+        }
+        window.speechSynthesis.cancel(); // clear any queued speech
 
-      const cleanAnswerForSpeech = answer
-        .replace(/\|/g, ', ')
-        .replace(/[\*\#\`\_]/g, '')
-        .replace(/\bINR\b/g, 'Rupees')
-        .replace(/\s+/g, ' ')
-        .trim();
+        const cleanAnswerForSpeech = answer
+          .replace(/\|/g, ', ')
+          .replace(/[\*\#\`\_]/g, '')
+          .replace(/\bINR\b/g, 'Rupees')
+          .replace(/\s+/g, ' ')
+          .trim();
 
-      const utterance = new window.SpeechSynthesisUtterance(cleanAnswerForSpeech);
-      utterance.lang = MARKETS[market]?.lang || 'en-IN';
-      utterance.rate = 1.05;
-      utterance.pitch = 1.0;
-      // Pick a clear female voice if available
-      const voices = window.speechSynthesis.getVoices();
-      const languagePrefix = utterance.lang.split('-')[0].toLowerCase();
-      const preferred = voices.find(v => v.lang.toLowerCase().startsWith(languagePrefix) && v.name.toLowerCase().includes('female'))
-        || voices.find(v => v.lang.toLowerCase().startsWith(languagePrefix) && !v.name.toLowerCase().includes('male'))
-        || voices[0];
-      if (preferred) utterance.voice = preferred;
+        const utterance = new window.SpeechSynthesisUtterance(
+          cleanAnswerForSpeech
+        );
+        utterance.lang = MARKETS[market]?.lang || 'en-IN';
+        utterance.rate = 1.05;
+        utterance.pitch = 1.0;
+        // Pick a clear female voice if available
+        const voices = window.speechSynthesis.getVoices();
+        const languagePrefix = utterance.lang.split('-')[0].toLowerCase();
+        const preferred =
+          voices.find(
+            (v) =>
+              v.lang.toLowerCase().startsWith(languagePrefix) &&
+              v.name.toLowerCase().includes('female')
+          ) ||
+          voices.find(
+            (v) =>
+              v.lang.toLowerCase().startsWith(languagePrefix) &&
+              !v.name.toLowerCase().includes('male')
+          ) ||
+          voices[0];
+        if (preferred) utterance.voice = preferred;
 
-      utterance.onend = () => {
+        utterance.onend = () => {
+          setIsSpeaking(false);
+          isSpeakingRef.current = false;
+          setActiveStage(null);
+          isProcessingRef.current = false;
+          accumulatedSpeechRef.current = '';
+          if (callStateRef.current === 'active') {
+            setTimeout(() => {
+              try {
+                recognitionRef.current?.start();
+              } catch (_) {}
+            }, 200);
+          }
+        };
+        utterance.onerror = (e) => {
+          console.warn('TTS error:', e);
+          setIsSpeaking(false);
+          isSpeakingRef.current = false;
+          setActiveStage(null);
+          isProcessingRef.current = false;
+          accumulatedSpeechRef.current = '';
+          if (callStateRef.current === 'active') {
+            setTimeout(() => {
+              try {
+                recognitionRef.current?.start();
+              } catch (_) {}
+            }, 200);
+          }
+        };
+
+        window.speechSynthesis.speak(utterance);
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        console.error('RAG query error:', err);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `err-${Date.now()}`,
+            role: 'assistant',
+            content: `Sorry, I encountered an error: ${err.message}`,
+            sources: [],
+            ts: new Date().toISOString(),
+          },
+        ]);
+        setActiveStage(null);
         setIsSpeaking(false);
         isSpeakingRef.current = false;
-        setActiveStage(null);
         isProcessingRef.current = false;
-        accumulatedSpeechRef.current = '';
+        // Resume listening even on error
         if (callStateRef.current === 'active') {
-          setTimeout(() => { try { recognitionRef.current?.start(); } catch (_) {} }, 200);
+          setTimeout(() => {
+            try {
+              recognitionRef.current?.start();
+            } catch (_) {}
+          }, 800);
         }
-      };
-      utterance.onerror = (e) => {
-        console.warn('TTS error:', e);
-        setIsSpeaking(false);
-        isSpeakingRef.current = false;
-        setActiveStage(null);
-        isProcessingRef.current = false;
-        accumulatedSpeechRef.current = '';
-        if (callStateRef.current === 'active') {
-          setTimeout(() => { try { recognitionRef.current?.start(); } catch (_) {} }, 200);
-        }
-      };
-
-      window.speechSynthesis.speak(utterance);
-
-    } catch (err) {
-      if (err.name === 'AbortError') return;
-      console.error('RAG query error:', err);
-      setMessages(prev => [...prev, {
-        id: `err-${Date.now()}`,
-        role: 'assistant',
-        content: `Sorry, I encountered an error: ${err.message}`,
-        sources: [],
-        ts: new Date().toISOString(),
-      }]);
-      setActiveStage(null);
-      setIsSpeaking(false);
-      isSpeakingRef.current = false;
-      isProcessingRef.current = false;
-      // Resume listening even on error
-      if (callStateRef.current === 'active') {
-        setTimeout(() => { try { recognitionRef.current?.start(); } catch (_) {} }, 800);
+      } finally {
+        if (requestAbortRef.current === controller)
+          requestAbortRef.current = null;
       }
-    } finally {
-      if (requestAbortRef.current === controller) requestAbortRef.current = null;
-    }
-  }, [ensureSession, market]);
+    },
+    [ensureSession, market]
+  );
 
   // ── Start Voice Call ──
   const startCall = useCallback(async () => {
@@ -546,7 +524,9 @@ export default function VoiceStudioPage() {
     isSpeakingRef.current = false;
 
     if (!recognitionRef.current) {
-      setError('Voice input requires Chrome or Edge. Switch to Text Mode to continue.');
+      setError(
+        'Voice input requires Chrome or Edge. Switch to Text Mode to continue.'
+      );
       setUseTextMode(true);
       setCallState('idle');
       callStateRef.current = 'idle';
@@ -554,7 +534,9 @@ export default function VoiceStudioPage() {
     }
 
     if (!navigator.mediaDevices?.getUserMedia) {
-      setError('Microphone access requires a secure browser context (HTTPS or localhost). Use Text Mode to continue.');
+      setError(
+        'Microphone access requires a secure browser context (HTTPS or localhost). Use Text Mode to continue.'
+      );
       setUseTextMode(true);
       setCallState('idle');
       callStateRef.current = 'idle';
@@ -564,11 +546,13 @@ export default function VoiceStudioPage() {
     // Pre-check mic
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(t => t.stop());
+      stream.getTracks().forEach((t) => t.stop());
       setMicStatus('granted');
     } catch (micErr) {
       setMicStatus('denied');
-      setError(`🎤 Microphone blocked: ${micErr.message}. Click the lock icon → allow microphone → try again.`);
+      setError(
+        `Microphone blocked: ${micErr.message}. Click the lock icon → allow microphone → try again.`
+      );
       setCallState('idle');
       callStateRef.current = 'idle';
       return;
@@ -586,422 +570,432 @@ export default function VoiceStudioPage() {
     setCallState('active');
     callStateRef.current = 'active';
     await startMicVisualization();
-    try { recognitionRef.current?.start(); } catch (_) {}
+    try {
+      recognitionRef.current?.start();
+    } catch (_) {}
   }, [ensureSession, startMicVisualization]);
 
   // ── End Voice Call ──
-  const endCall = useCallback(() => {
-    callStateRef.current = 'idle';
+  const endCall = useCallback(async () => {
+    callStateRef.current = 'ending';
+    setCallState('ending');
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
     requestAbortRef.current?.abort();
     requestAbortRef.current = null;
-    try { recognitionRef.current?.abort(); } catch (_) {}
+    try {
+      recognitionRef.current?.abort();
+    } catch (_) {}
     window.speechSynthesis?.cancel();
-    if (sessionIdRef.current) {
-      fetch(`/api/voice/session/${encodeURIComponent(sessionIdRef.current)}/end`, { method: 'POST' }).catch(() => {});
-      sessionIdRef.current = null;
-    }
     stopMicVisualization();
     isProcessingRef.current = false;
     isSpeakingRef.current = false;
-    setCallState('idle');
     setActiveStage(null);
     setIsSpeaking(false);
     setIsListening(false);
     setPartialTranscript('');
+    try {
+      if (sessionIdRef.current) {
+        const response = await fetch(
+          `/api/voice/session/${encodeURIComponent(sessionIdRef.current)}/end`,
+          { method: 'POST' }
+        );
+        if (!response.ok)
+          throw new Error(
+            'Unable to save this call. Please try ending it again.'
+          );
+        sessionIdRef.current = null;
+        setHasSession(false);
+      }
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      callStateRef.current = 'idle';
+      setCallState('idle');
+    }
   }, [stopMicVisualization]);
 
   // ── Text-mode query (fallback) ──
-  const handleTextQuery = useCallback(async (text) => {
-    const query = text || inputText;
-    if (!query.trim() || isTextProcessing) return;
-    setInputText('');
-    setIsTextProcessing(true);
-    setMessages(prev => [...prev, {
-      id: `usr-${Date.now()}`, role: 'user', content: query, ts: new Date().toISOString()
-    }]);
+  const handleTextQuery = useCallback(
+    async (text) => {
+      const query = text || inputText;
+      if (
+        !query.trim() ||
+        isTextProcessing ||
+        callStateRef.current === 'ending'
+      )
+        return;
+      setInputText('');
+      setIsTextProcessing(true);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `usr-${Date.now()}`,
+          role: 'user',
+          content: query,
+          ts: new Date().toISOString(),
+        },
+      ]);
 
-    setActiveStage('gateway');
-    setTimeout(() => setActiveStage('rag'), 80);
+      setActiveStage('gateway');
+      setTimeout(() => setActiveStage('rag'), 80);
 
-    try {
-      const callId = await ensureSession();
-      const res = await fetch('/api/voice/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query,
-          top_k: 2,
-          call_id: callId,
-          market,
-          language: MARKETS[market]?.lang || 'en-IN',
-        }),
-      });
-      if (!res.ok) {
-        const detail = await res.json().catch(() => null);
-        throw new Error(detail?.message || detail?.error || `HTTP ${res.status}`);
+      try {
+        const callId = await ensureSession();
+        const res = await fetch('/api/voice/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query,
+            top_k: 2,
+            call_id: callId,
+            market,
+            language: MARKETS[market]?.lang || 'en-IN',
+          }),
+        });
+        if (!res.ok) {
+          const detail = await res.json().catch(() => null);
+          throw new Error(
+            detail?.message || detail?.error || `HTTP ${res.status}`
+          );
+        }
+        const data = await res.json();
+        setActiveStage('llm');
+        setTotalCallLatency(data.latency_ms);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `agt-${Date.now()}`,
+            role: 'assistant',
+            content: data.answer,
+            sources: data.sources || [],
+            latency_ms: data.latency_ms,
+            agentName: `${MARKETS[market]?.agent || 'Veyra'} (Veyra)`,
+            ts: new Date().toISOString(),
+          },
+        ]);
+        setActiveStage(null);
+      } catch (err) {
+        console.error('RAG query error:', err);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `err-${Date.now()}`,
+            role: 'assistant',
+            content:
+              'The answer could not be retrieved. Please try again or ask a human for help.',
+            sources: [],
+            ts: new Date().toISOString(),
+          },
+        ]);
+        setActiveStage(null);
+      } finally {
+        setIsTextProcessing(false);
       }
-      const data = await res.json();
-      setActiveStage('llm');
-      setTotalCallLatency(data.latency_ms);
-      setMessages(prev => [...prev, {
-        id: `agt-${Date.now()}`,
-        role: 'assistant',
-        content: data.answer,
-        sources: data.sources || [],
-        latency_ms: data.latency_ms,
-        agentName: `${MARKETS[market]?.agent || 'Veyra'} (Veyra)`,
-        ts: new Date().toISOString(),
-      }]);
-      setActiveStage(null);
-    } catch (err) {
-      console.error('RAG query error:', err);
-      setMessages(prev => [...prev, {
-        id: `err-${Date.now()}`,
-        role: 'assistant',
-        content: `RAG service error: ${err.message}. Make sure the API Gateway (:3001) and FastAPI RAG (:8001) are both running.`,
-        sources: [],
-        ts: new Date().toISOString(),
-      }]);
-      setActiveStage(null);
-    } finally {
-      setIsTextProcessing(false);
-    }
-  }, [ensureSession, inputText, isTextProcessing, market]);
+    },
+    [ensureSession, inputText, isTextProcessing, market]
+  );
 
   const isCallActive = callState === 'active';
   const isConnecting = callState === 'connecting' || callState === 'ending';
 
   return (
-    <div className="max-w-[1100px] mx-auto space-y-8 animate-fadeIn">
-
-      {/* ── Page Header ─────────────────────────────────────── */}
-      <div className="flex flex-wrap items-end justify-between gap-4 pb-6 border-b dark:border-white/[0.06] border-slate-200">
-        <div>
-          <h1 className="text-h2 font-extrabold tracking-tight">Voice Studio</h1>
-          <p className="text-body dark:text-slate-400 text-slate-500 mt-1">
-            Real-time speech-to-speech AI agent · Grounded by FastAPI RAG
-          </p>
-        </div>
-
-        {/* Market Switcher */}
-        <div className="flex flex-wrap gap-2">
-          {Object.entries(MARKETS).map(([key, m]) => (
-            <button
-              key={key}
-              onClick={() => { if (!isCallActive) { sessionIdRef.current = null; setMarket(key); setMessages([]); } }}
-              disabled={isCallActive}
-              className={`px-3.5 py-2 rounded-xl text-[13px] font-bold transition-all flex items-center gap-1.5 ${
-                market === key
-                  ? 'bg-[#5B5FFF] text-white shadow-lg shadow-[#5B5FFF]/25'
-                  : 'dark:bg-slate-800/60 bg-slate-100 dark:text-slate-300 text-slate-600 hover:dark:bg-slate-800 hover:bg-slate-200 disabled:opacity-40'
-              }`}
-            >
-              <span>{m.flag}</span>
-              <span>{m.name}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Voice Orb + Controls ─────────────────────────────── */}
-      <div className="relative rounded-3xl dark:bg-[#0F172A] bg-white border dark:border-white/[0.06] border-slate-200 shadow-xl overflow-hidden">
-        {/* Background gradient when active */}
-        <AnimatePresence>
-          {isCallActive && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-gradient-to-br from-[#5B5FFF]/5 via-transparent to-[#7C6CFF]/5 pointer-events-none"
-            />
+    <div className="page">
+      <PageHeading
+        eyebrow="Conversation workspace"
+        title="Voice Studio"
+        description="Talk to your knowledge. Follow every answer back to its source."
+        actions={
+          <StatusBadge
+            tone={
+              isCallActive ? 'success' : isConnecting ? 'warning' : 'neutral'
+            }
+          >
+            {isCallActive
+              ? 'Call active'
+              : isConnecting
+                ? callState === 'ending'
+                  ? 'Saving session'
+                  : 'Connecting'
+                : hasSession
+                  ? 'Session open'
+                  : 'Ready when you are'}
+          </StatusBadge>
+        }
+      />
+      {error && (
+        <div
+          role="alert"
+          className="notice notice-error flex flex-wrap items-center justify-between gap-3"
+        >
+          <span className="flex-1">{error}</span>
+          <button
+            className="btn"
+            disabled={isCallActive || isConnecting}
+            onClick={() => setUseTextMode(true)}
+          >
+            Use Text Mode
+          </button>
+          {rawError && (
+            <details className="basis-full">
+              <summary>Technical details</summary>
+              <pre className="text-xs whitespace-pre-wrap break-all mt-3">
+                {JSON.stringify(rawError, null, 2)}
+              </pre>
+            </details>
           )}
-        </AnimatePresence>
-
-        <div className="relative z-10 p-8 flex flex-col lg:flex-row items-center gap-8">
-          {/* Orb */}
-          <div className="flex flex-col items-center gap-4 flex-shrink-0">
-            <VoiceOrb isActive={isCallActive} isSpeaking={isSpeaking} volumeLevel={volumeLevel} />
-
-            {/* Status Badge */}
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[12px] font-bold border transition-all ${
-              isCallActive
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                : isConnecting
-                ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
-                : 'dark:bg-slate-800/60 bg-slate-100 dark:border-white/10 border-slate-200 dark:text-slate-400 text-slate-500'
-            }`}>
-              <span className={`w-2 h-2 rounded-full ${
-                isCallActive ? 'bg-emerald-400 animate-pulse' : isConnecting ? 'bg-amber-400 animate-pulse' : 'dark:bg-slate-600 bg-slate-400'
-              }`} />
-              {isCallActive ? 'Live · Mic Active' : isConnecting ? callState === 'connecting' ? 'Connecting…' : 'Ending call…' : 'Ready'}
-            </div>
-          </div>
-
-          {/* Info + Controls */}
-          <div className="flex-1 space-y-5 text-center lg:text-left">
+        </div>
+      )}
+      <div className="voice-layout">
+        <aside
+          className="panel !p-5"
+          aria-label="Agent selection and session controls"
+        >
+          <div className="panel-header !mb-4">
             <div>
-              <h2 className="text-[22px] font-bold dark:text-white text-slate-900">
-                {isCallActive
-                  ? isSpeaking ? `${current.agent} is responding…` : 'Listening — speak now'
-                  : `${current.agent} · ${current.name} Agent`}
-              </h2>
-              <p className="dark:text-slate-400 text-slate-500 mt-1 text-[14px]">
-                {isCallActive
-                  ? 'Your voice is being processed through the full RAG pipeline in real time.'
-                  : `Click "Start Voice Call" to begin a live session. ${current.agent} will answer using knowledge grounded in your document store.`}
-              </p>
+              <h2 className="panel-title">Choose your agent</h2>
+              <p className="panel-description">Four markets. One workspace.</p>
             </div>
-
-            {/* Live latency badge */}
-            {totalCallLatency && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg dark:bg-[#070B14] bg-slate-100 border dark:border-white/5 border-slate-200 text-[12px] font-mono"
+            <Globe size={17} className="text-muted" />
+          </div>
+          <label className="agent-mobile-selector text-xs text-muted">
+            Agent and market
+            <select
+              className="field mt-2"
+              value={market}
+              disabled={hasSession || isConnecting || isTextProcessing}
+              onChange={(event) => {
+                setMarket(event.target.value);
+                setMessages([]);
+                setTotalCallLatency(null);
+                setLatencies({});
+              }}
+            >
+              {Object.entries(MARKETS).map(([key, agent]) => (
+                <option key={key} value={key}>
+                  {agent.agent} · {agent.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="agent-options space-y-1">
+            {Object.entries(MARKETS).map(([key, agent]) => (
+              <button
+                key={key}
+                className={`agent-option ${market === key ? 'selected' : ''}`}
+                aria-pressed={market === key}
+                disabled={hasSession || isConnecting || isTextProcessing}
+                onClick={() => {
+                  setMarket(key);
+                  setMessages([]);
+                  setTotalCallLatency(null);
+                  setLatencies({});
+                }}
               >
-                <Timer className="w-3.5 h-3.5 text-[#5B5FFF]" />
-                <span className="dark:text-slate-300 text-slate-600">Last turn:</span>
-                <span className={`font-bold ${totalCallLatency < 1500 ? 'text-emerald-400' : totalCallLatency < 2500 ? 'text-amber-400' : 'text-rose-400'}`}>
-                  {totalCallLatency}ms
+                <span className="agent-initial">{agent.agent.slice(0, 1)}</span>
+                <span className="flex-1">
+                  <strong className="block text-xs font-semibold">
+                    {agent.agent}
+                  </strong>
+                  <span className="block text-[10px] text-muted mt-1">
+                    {agent.name}
+                  </span>
                 </span>
-                <span className="dark:text-slate-600 text-slate-400">
-                  {totalCallLatency < 1500 ? '✓ sub-1.5s target' : totalCallLatency < 2500 ? '~ near target' : '⚠ above target'}
-                </span>
-              </motion.div>
-            )}
-
-            {/* Error */}
-            <AnimatePresence>
-              {error && (
-                <motion.div
-                  initial={{ opacity: 0, y: -5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className="space-y-2"
+                {market === key && (
+                  <CheckCircle2 size={15} className="text-accent" />
+                )}
+              </button>
+            ))}
+          </div>
+          <div className="voice-session">
+            <p className="text-[10px] text-muted uppercase tracking-widest">
+              Session controls
+            </p>
+            <VoiceWave
+              active={isCallActive && !isSpeaking}
+              level={volumeLevel}
+            />
+            <p role="status" className="text-center text-xs font-semibold">
+              {isCallActive
+                ? isSpeaking
+                  ? `${current.agent} is responding`
+                  : isListening
+                    ? 'Listening to you'
+                    : 'Processing your question'
+                : useTextMode
+                  ? 'Text conversation'
+                  : `${current.agent} is ready`}
+            </p>
+            <p className="text-[10px] text-muted text-center mt-2 mb-5">
+              {current.lang} · {current.name}
+            </p>
+            <div className="space-y-2">
+              {!isCallActive && !useTextMode && (
+                <button
+                  onClick={startCall}
+                  disabled={isConnecting || isTextProcessing}
+                  className="btn btn-primary w-full"
                 >
-                  <div className="flex items-start gap-2 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-[13px] text-rose-400">
-                    <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <span>{error}</span>
-                  </div>
-                  {rawError && (
-                    <details className="text-[11px] font-mono dark:bg-black/40 bg-slate-100 rounded-lg border dark:border-white/5 border-slate-200 overflow-hidden">
-                      <summary className="px-3 py-2 cursor-pointer dark:text-slate-400 text-slate-500 select-none">
-                        🔍 Raw Vapi error (click to expand)
-                      </summary>
-                      <pre className="px-3 pb-3 dark:text-rose-300 text-rose-600 overflow-x-auto whitespace-pre-wrap break-all">
-                        {JSON.stringify(rawError, null, 2)}
-                      </pre>
-                    </details>
-                  )}
-                  <p className="text-[11px] dark:text-slate-500 text-slate-400">
-                    💡 Open DevTools (F12) → Console for full Vapi SDK logs.
-                  </p>
-                </motion.div>
+                  <Phone size={15} />
+                  {isConnecting ? 'Connecting…' : 'Start Voice Call'}
+                </button>
               )}
-            </AnimatePresence>
-
-
-            {/* CTA Buttons */}
-            <div className="flex flex-wrap items-center gap-3">
-              {!isCallActive ? (
-                <>
-                  <button
-                    onClick={startCall}
-                    disabled={isConnecting}
-                    className="flex items-center gap-2.5 px-6 py-3 rounded-2xl bg-[#5B5FFF] hover:bg-[#4A4EE0] text-white font-bold text-[14px] shadow-lg shadow-[#5B5FFF]/30 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-60 disabled:cursor-wait"
-                  >
-                    {isConnecting ? (
-                      <motion.div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full" animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }} />
-                    ) : (
-                      <Phone className="w-4 h-4" />
-                    )}
-                    {isConnecting ? 'Connecting…' : 'Start Voice Call'}
-                  </button>
-                  <button
-                    onClick={() => setUseTextMode(p => !p)}
-                    className={`flex items-center gap-2 px-4 py-3 rounded-2xl text-[13px] font-semibold border transition-all ${
-                      useTextMode
-                        ? 'bg-[#5B5FFF]/10 border-[#5B5FFF]/40 text-[#7C6CFF]'
-                        : 'dark:border-white/10 border-slate-200 dark:text-slate-400 text-slate-500 hover:dark:border-white/20'
-                    }`}
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    Text Mode
-                  </button>
-                </>
-              ) : (
+              {(isCallActive || hasSession) && (
                 <button
                   onClick={endCall}
-                  className="flex items-center gap-2.5 px-6 py-3 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-[14px] shadow-lg shadow-rose-500/30 transition-all hover:scale-[1.02] active:scale-95"
+                  disabled={isConnecting || isTextProcessing}
+                  className="btn btn-danger w-full"
                 >
-                  <PhoneOff className="w-4 h-4" />
-                  End Call
+                  <PhoneOff size={15} />
+                  {callState === 'ending'
+                    ? 'Saving session…'
+                    : isCallActive
+                      ? 'End Call'
+                      : 'End Session'}
                 </button>
               )}
             </div>
+            <p className="text-[10px] text-muted leading-5 mt-4">
+              {hasSession
+                ? 'End the session to save it to Call History. Agent selection is locked during a session.'
+                : useTextMode
+                  ? 'Send your first question to open a session.'
+                  : 'Allow microphone access to begin. Text mode is always available.'}
+            </p>
           </div>
-        </div>
-
-        {/* Pipeline flow bar (shown during active call) */}
-        <AnimatePresence>
-          {(isCallActive || activeStage) && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="px-8 pb-6"
-            >
-              <PipelineFlow activeStage={activeStage} latencies={latencies} />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* ── Conversation Transcript ──────────────────────────── */}
-      <div className="rounded-3xl dark:bg-[#0F172A] bg-white border dark:border-white/[0.06] border-slate-200 shadow-xl overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b dark:border-white/[0.06] border-slate-200">
-          <h3 className="font-bold dark:text-white text-slate-900">Live Transcript · RAG Citations</h3>
-          <div className="flex items-center gap-2">
-            {isCallActive && (
-              <span className="flex items-center gap-1.5 text-[12px] font-bold text-emerald-400">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                Recording
-              </span>
-            )}
-            <span className="text-[12px] font-mono dark:text-slate-500 text-slate-400">
-              {messages.length} turns
-            </span>
-          </div>
-        </div>
-
-        <div className="p-6 space-y-5 min-h-[300px] max-h-[480px] overflow-y-auto">
-          {messages.length === 0 && !partialTranscript && (
-            <div className="flex flex-col items-center justify-center py-16 space-y-3">
-              <div className="w-12 h-12 rounded-2xl dark:bg-slate-800 bg-slate-100 flex items-center justify-center">
-                <Mic className="w-5 h-5 dark:text-slate-600 text-slate-400" />
-              </div>
-              <p className="dark:text-slate-500 text-slate-400 text-[14px] text-center">
-                {useTextMode ? 'Type a question below to test the RAG pipeline' : 'Start a voice call to see the live transcript here'}
+        </aside>
+        <section
+          className="panel conversation-panel"
+          aria-label="Conversation transcript"
+        >
+          <div className="conversation-header">
+            <div>
+              <h2 className="panel-title">Conversation</h2>
+              <p className="panel-description">
+                {messages.length} turns · {current.agent}
               </p>
             </div>
-          )}
-
-          {messages.map(msg => (
-            <MessageBubble key={msg.id} msg={msg} />
-          ))}
-
-          {/* Partial transcript (user speaking) */}
-          <AnimatePresence>
+            <div className="segmented" aria-label="Conversation mode">
+              <button
+                aria-pressed={!useTextMode}
+                disabled={isCallActive || isConnecting || isTextProcessing}
+                onClick={() => setUseTextMode(false)}
+              >
+                Voice
+              </button>
+              <button
+                aria-pressed={useTextMode}
+                disabled={isCallActive || isConnecting || isTextProcessing}
+                onClick={() => setUseTextMode(true)}
+              >
+                Text Mode
+              </button>
+            </div>
+          </div>
+          <div
+            className="conversation-messages"
+            role="log"
+            aria-label="Live transcript"
+            aria-relevant="additions text"
+          >
+            {!messages.length && !partialTranscript && (
+              <EmptyState
+                icon={useTextMode ? Send : Mic}
+                title={
+                  useTextMode
+                    ? 'Start with a question'
+                    : 'A conversation starts with listening'
+                }
+              >
+                {useTextMode
+                  ? `Ask ${current.agent} a question about ${current.name.toLowerCase()}. Answers and supporting sources appear here.`
+                  : 'Start a voice call to see the live transcript, responses, and supporting knowledge in one place.'}
+              </EmptyState>
+            )}
+            {messages.map((msg) => (
+              <MessageBubble key={msg.id} msg={msg} />
+            ))}
             {partialTranscript && (
-              <motion.div
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="flex flex-col items-end"
-              >
-                <div className="max-w-[85%] px-4 py-3 rounded-2xl rounded-tr-sm text-[14px] bg-[#5B5FFF]/70 text-white italic">
-                  {partialTranscript}
-                  <span className="animate-pulse ml-1">▌</span>
-                </div>
-              </motion.div>
+              <MessageBubble
+                msg={{
+                  role: 'user',
+                  content: partialTranscript,
+                  isPartial: true,
+                }}
+              />
             )}
-          </AnimatePresence>
-
-          {/* Processing indicator */}
-          <AnimatePresence>
-            {(isTextProcessing || (isCallActive && activeStage && activeStage !== 'asr' && activeStage !== 'tts')) && (
-              <motion.div
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="flex items-start gap-3"
-              >
-                <div className="flex items-center gap-2 px-4 py-3 rounded-2xl rounded-tl-sm dark:bg-[#151D30] bg-slate-100 border dark:border-white/5 border-slate-200 text-[13px] dark:text-slate-400 text-slate-500">
-                  <motion.div className="flex gap-1">
-                    {[0, 1, 2].map(i => (
-                      <motion.span
-                        key={i}
-                        className="w-1.5 h-1.5 rounded-full bg-[#5B5FFF]"
-                        animate={{ y: [0, -4, 0] }}
-                        transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }}
-                      />
-                    ))}
-                  </motion.div>
-                  <span>Searching knowledge base…</span>
-                </div>
-              </motion.div>
+            {isTextProcessing && (
+              <p role="status" className="text-xs text-muted">
+                Checking knowledge for your answer…
+              </p>
             )}
-          </AnimatePresence>
-
-          <div ref={chatEndRef} />
-        </div>
-
-        {/* Text mode input */}
-        <AnimatePresence>
-          {useTextMode && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="border-t dark:border-white/[0.06] border-slate-200 p-4 flex items-center gap-3"
+            <div ref={chatEndRef} />
+          </div>
+          {useTextMode ? (
+            <form
+              className="composer"
+              onSubmit={(event) => {
+                event.preventDefault();
+                handleTextQuery();
+              }}
             >
               <input
                 type="text"
+                aria-label="Ask the agent"
                 value={inputText}
-                onChange={e => setInputText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && !isTextProcessing && handleTextQuery()}
-                placeholder={`Ask ${current.agent} about ${current.name.toLowerCase()} policies…`}
-                className="flex-1 px-4 py-3 rounded-xl dark:bg-[#151D30] bg-slate-100 border dark:border-white/[0.08] border-slate-200 text-[14px] dark:text-white text-slate-900 placeholder:dark:text-slate-600 placeholder:text-slate-400 focus:outline-none focus:border-[#5B5FFF] transition-colors"
+                onChange={(event) => setInputText(event.target.value)}
+                placeholder={`Ask ${current.agent} a question…`}
+                className="field flex-1"
+                disabled={isTextProcessing || isConnecting}
               />
               <button
-                onClick={() => handleTextQuery()}
-                disabled={isTextProcessing || !inputText.trim()}
-                className="px-5 py-3 rounded-xl bg-[#5B5FFF] hover:bg-[#4A4EE0] text-white font-bold text-[13px] flex items-center gap-2 shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                type="submit"
+                disabled={isTextProcessing || isConnecting || !inputText.trim()}
+                className="btn btn-primary"
               >
-                <Send className="w-4 h-4" />
-                Ask
+                <Send size={15} />
+                <span>Ask</span>
               </button>
-            </motion.div>
+            </form>
+          ) : (
+            <div className="composer text-[11px] text-muted">
+              <Mic size={14} />
+              {isCallActive
+                ? 'Your transcript appears as you speak.'
+                : 'Choose an agent and start a voice call, or switch to Text Mode.'}
+            </div>
           )}
-        </AnimatePresence>
+        </section>
       </div>
-
-      {/* ── Pipeline Architecture Diagram ────────────────────── */}
-      <div className="rounded-3xl dark:bg-[#0F172A] bg-white border dark:border-white/[0.06] border-slate-200 p-6 shadow-xl">
-        <h3 className="font-bold dark:text-white text-slate-900 mb-5">Voice Pipeline Architecture</h3>
-        <div className="flex flex-wrap items-center justify-center gap-2 text-[12px]">
+      <details className="panel !py-4">
+        <summary className="cursor-pointer text-xs font-semibold text-muted">
+          Session diagnostics{' '}
+          {totalCallLatency != null
+            ? `· Last gateway reply ${totalCallLatency} ms`
+            : ''}
+        </summary>
+        <p className="text-xs text-muted mt-4 leading-6">
+          Recorded service timings are shown when available. Gateway reply time
+          does not measure the complete speech-to-audio experience.
+        </p>
+        <dl className="grid sm:grid-cols-3 gap-4 mt-4">
           {[
-            { label: 'Browser Mic', sub: 'WebRTC Audio', color: 'slate' },
-            { label: 'Vapi Cloud', sub: 'Streaming ASR · VAD', color: 'violet' },
-            { label: 'Express :3001', sub: 'API Gateway · SSE', color: 'indigo' },
-            { label: 'FastAPI :8001', sub: 'FAISS 3072d · RAG', color: 'blue' },
-            { label: 'Gemini Flash', sub: 'LLM · Grounding', color: 'purple' },
-            { label: 'Vapi TTS', sub: 'Deepgram Aura', color: 'cyan' },
-            { label: 'Customer Hears', sub: '< 2s Voice Turn', color: 'emerald' },
-          ].map((node, i, arr) => (
-            <React.Fragment key={node.label}>
-              <div className={`flex flex-col items-center px-3 py-2 rounded-xl border text-center ${
-                node.color === 'slate' ? 'dark:border-slate-700 border-slate-200 dark:bg-slate-800/50 bg-slate-100' :
-                node.color === 'violet' ? 'border-violet-500/30 bg-violet-500/5 text-violet-400' :
-                node.color === 'indigo' ? 'border-[#5B5FFF]/30 bg-[#5B5FFF]/5 text-[#7C6CFF]' :
-                node.color === 'blue' ? 'border-blue-500/30 bg-blue-500/5 text-blue-400' :
-                node.color === 'purple' ? 'border-purple-500/30 bg-purple-500/5 text-purple-400' :
-                node.color === 'cyan' ? 'border-cyan-500/30 bg-cyan-500/5 text-cyan-400' :
-                'border-emerald-500/30 bg-emerald-500/5 text-emerald-400'
-              }`}>
-                <span className="font-bold">{node.label}</span>
-                <span className="dark:text-slate-500 text-slate-400 text-[10px] mt-0.5">{node.sub}</span>
-              </div>
-              {i < arr.length - 1 && (
-                <ArrowRight className="w-3.5 h-3.5 dark:text-slate-600 text-slate-400 flex-shrink-0" />
-              )}
-            </React.Fragment>
+            ['Knowledge retrieval', latencies.rag],
+            ['Answer generation', latencies.llm],
+            ['Gateway overhead', latencies.gateway],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <dt className="text-[10px] text-muted">{label}</dt>
+              <dd className="text-sm tabular-nums mt-2">
+                {Number.isFinite(value) && value >= 0
+                  ? `${Math.round(value)} ms`
+                  : 'Not measured'}
+              </dd>
+            </div>
           ))}
-        </div>
-      </div>
-
+        </dl>
+      </details>
     </div>
   );
 }

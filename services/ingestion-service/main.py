@@ -2,7 +2,7 @@
 Veyra Ingestion Service
 Handles: document loading → cleaning → chunking → Google embedding → FAISS indexing
 
-Embedding: Google text-embedding-004 (768-dim, via API — no local model needed)
+Embedding: Google gemini-embedding-001 (3072-dim, via API; no local model needed)
 Run: uvicorn main:app --reload --port 8002
 """
 
@@ -12,6 +12,8 @@ import json
 import time
 import hashlib
 import logging
+import sys
+import uuid
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
@@ -19,7 +21,7 @@ from datetime import datetime
 import numpy as np
 import faiss
 import google.generativeai as genai
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -29,13 +31,16 @@ from pypdf import PdfReader  # Alternative PDF reader
 from bs4 import BeautifulSoup
 import requests as req_lib
 
-load_dotenv("../../.env")
+BASE_DIR = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(BASE_DIR / 'services'))
+from managed_knowledge import discard_staged_document, publish_staged_document, read_snapshot, replace_document, stage_document
+load_dotenv(os.getenv('VEYRA_ENV_FILE') or BASE_DIR / '.env')
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────
 GEMINI_API_KEY     = os.getenv("GEMINI_API_KEY", "")
-EMBEDDING_MODEL    = "models/gemini-embedding-001"  # Google 768-dim, confirmed available
+EMBEDDING_MODEL    = "models/gemini-embedding-001"  # Google 3072-dim embedding model
 EMBEDDING_DIM      = 3072   # gemini-embedding-001 output dimension
 BASE_DIR           = Path(__file__).resolve().parents[2]
 FAISS_INDEX_PATH   = os.getenv("FAISS_INDEX_PATH", str(BASE_DIR / "knowledge-base" / "embeddings" / "faiss_index"))
@@ -45,9 +50,13 @@ CHUNK_MIN_CHARS    = 80
 EMBED_BATCH_SIZE   = 20      # Google allows up to 100 per call; keep low to avoid rate limits
 
 INDEX_DIR     = Path(FAISS_INDEX_PATH)
+if not INDEX_DIR.is_absolute():
+    INDEX_DIR = BASE_DIR / INDEX_DIR
+if INDEX_DIR.suffix == '.faiss':
+    INDEX_DIR = INDEX_DIR.parent
 INDEX_FILE    = INDEX_DIR / "index.faiss"
 METADATA_FILE = INDEX_DIR / "metadata.json"
-RAW_DIR       = Path("../../knowledge-base/raw")
+RAW_DIR       = Path(os.getenv('KNOWLEDGE_RAW_PATH') or BASE_DIR / "knowledge-base" / "raw")
 
 INDEX_DIR.mkdir(parents=True, exist_ok=True)
 RAW_DIR.mkdir(parents=True, exist_ok=True)
@@ -245,7 +254,8 @@ def extract_pdf_text(content: bytes) -> str:
     reader = PdfReader(pdf_file)
     for i, page in enumerate(reader.pages):
         text = page.extract_text()
-        parts.append(f"[PAGE {i+1}]\n{text}")
+        if text and text.strip():
+            parts.append(f"[PAGE {i+1}]\n\n{text}")
     return "\n".join(parts)
 
 
@@ -376,3 +386,120 @@ def save_index():
     with open(METADATA_FILE, "w") as f:
         json.dump(chunk_store, f, indent=2, default=str)
     logger.info(f"💾 Saved FAISS index: {len(chunk_store)} chunks")
+
+
+@app.put('/documents/{document_id}')
+async def index_document(document_id: uuid.UUID, file: UploadFile = File(...),
+                         title: str = Form(...), market: str = Form('india'),
+                         category: str = Form('general'), family_id: Optional[uuid.UUID] = Form(None),
+                         revision: int = Form(1, ge=1), content_hash: str = Form(''),
+                         product: Optional[str] = Form(None, min_length=1, max_length=100)):
+    content = await file.read(5 * 1024 * 1024 + 1)
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(413, 'Maximum document size is 5 MB')
+    actual_hash = hashlib.sha256(content).hexdigest()
+    if content_hash and content_hash != actual_hash:
+        raise HTTPException(422, 'Revision content hash does not match the uploaded file')
+    staged = INDEX_DIR / 'managed' / 'staged'
+    cached_path = staged / f'{document_id}.json'
+    cached_vectors = staged / f'{document_id}.npy'
+    if cached_path.exists() and cached_vectors.exists():
+        cached = json.loads(cached_path.read_text(encoding='utf-8'))
+        identity = {'content_hash': actual_hash, 'title': title, 'market': market,
+                    'category': category, 'product': product, 'revision': revision, 'family_id': str(family_id or document_id),
+                    'source': Path((file.filename or '').replace('\\', '/')).name}
+        if cached and all(all(c.get(key) == value for key, value in identity.items()) for c in cached):
+            vectors = np.load(cached_vectors, allow_pickle=False)
+            if vectors.shape == (len(cached), EMBEDDING_DIM) and np.isfinite(vectors).all() and np.all(np.linalg.norm(vectors, axis=1) > 0):
+                evidence = INDEX_DIR / 'managed' / 'revisions' / f'{document_id}.json'
+                if not evidence.exists():
+                    # Recover a crash after staging but before evidence was written.
+                    stage_document(INDEX_DIR, str(document_id), cached, vectors)
+                return {'chunks_added': len(cached), 'pii_detected': any(c['pii'] for c in cached), 'staged': True, 'reused': True}
+    filename = Path((file.filename or '').replace('\\', '/')).name
+    extension = Path(filename).suffix.lower()
+    try:
+        if extension == '.pdf':
+            text = extract_pdf_text(content)
+        elif extension in ('.txt', '.md'):
+            text = content.decode('utf-8-sig')
+        else:
+            raise HTTPException(400, 'Use PDF, TXT, or Markdown files')
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(422, 'The PDF could not be read; scanned PDFs need OCR' if extension == '.pdf' else 'Text and Markdown files must use UTF-8 encoding')
+    if not text.strip():
+        raise HTTPException(422, 'No extractable text; scanned PDFs need OCR')
+    # Keep short policy lines and split long paragraphs into bounded overlapping chunks.
+    text = re.sub(r'\[PAGE \d+\]\s*', '', text).strip()
+    chunks = []
+    for offset in range(0, len(text), CHUNK_SIZE_CHARS - CHUNK_OVERLAP_CHARS):
+        part = text[offset:offset + CHUNK_SIZE_CHARS].strip()
+        if part:
+            chunk = _build_chunk(part, filename, category, market, title, None, len(chunks))
+            chunk['document_id'] = str(document_id)
+            chunk['family_id'] = str(family_id or document_id)
+            chunk['revision'] = revision
+            chunk['content_hash'] = actual_hash
+            if product:
+                chunk['product'] = product
+            chunk['chunk_id'] = f'{document_id}:{len(chunks)}'
+            chunks.append(chunk)
+    if not chunks or len(chunks) > 500:
+        raise HTTPException(422, 'Document must contain text and produce at most 500 chunks')
+    if not GEMINI_API_KEY:
+        raise HTTPException(503, 'Embedding provider is not configured')
+    embeddings = []
+    try:
+        for offset in range(0, len(chunks), EMBED_BATCH_SIZE):
+            result = genai.embed_content(model=EMBEDDING_MODEL,
+                content=[c['content'] for c in chunks[offset:offset + EMBED_BATCH_SIZE]], task_type='retrieval_document')
+            embeddings.extend(result['embedding'])
+        stage_document(INDEX_DIR, str(document_id), chunks, embeddings)
+    except Exception:
+        logger.exception('Managed document indexing failed')
+        raise HTTPException(503, 'Embedding or index publication failed; retry the document')
+    return {'chunks_added': len(chunks), 'pii_detected': any(c['pii'] for c in chunks), 'staged': True}
+
+
+@app.post('/documents/{document_id}/publish')
+def publish_document(document_id: uuid.UUID, operation_id: Optional[int] = None):
+    if operation_id is not None and operation_id < 1:
+        raise HTTPException(422, 'Operation ID must be positive')
+    try:
+        name, count = publish_staged_document(INDEX_DIR, EMBEDDING_DIM, str(document_id), operation_id=operation_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except Exception:
+        logger.exception('Staged document publication failed')
+        raise HTTPException(503, 'Knowledge publication failed; the staged document remains available for retry')
+    return {'status': 'published', 'chunks_added': count, 'generation': name}
+
+
+@app.delete('/documents/{document_id}')
+def archive_document(document_id: uuid.UUID, operation_id: Optional[int] = None,
+                     family_id: Optional[uuid.UUID] = None):
+    if operation_id is not None and operation_id < 1:
+        raise HTTPException(422, 'Operation ID must be positive')
+    try:
+        name = replace_document(INDEX_DIR, EMBEDDING_DIM, str(document_id), [],
+                                family_id=str(family_id or document_id), operation_id=operation_id, replace_family=False)
+        discard_staged_document(INDEX_DIR, str(document_id))
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {'status': 'archived', 'generation': name}
+
+
+@app.get('/documents/{document_id}/chunks')
+def document_chunks(document_id: uuid.UUID):
+    _, records = read_snapshot(INDEX_DIR, EMBEDDING_DIM)
+    visible = [c for c in records if c['document_id'] == str(document_id)]
+    if visible:
+        return {'chunks': visible}
+    staged = INDEX_DIR / 'managed' / 'staged' / f'{document_id}.json'
+    evidence = INDEX_DIR / 'managed' / 'revisions' / f'{document_id}.json'
+    path = evidence if evidence.exists() else staged
+    return {'chunks': json.loads(path.read_text(encoding='utf-8')) if path.exists() else []}

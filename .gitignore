@@ -8,6 +8,9 @@
 
 # ── Node ─────────────────────────────────────────────────────
 node_modules/
+data/calls/
+data/*.sqlite*
+data/tenants/
 dist/
 build/
 .next/
@@ -55,3 +58,5 @@ videos/*.mp4
 videos/*.mkv
 demo/*.wav
 demo/*.mp3
+# Immutable, runtime-managed knowledge snapshots
+**/faiss_index/managed/

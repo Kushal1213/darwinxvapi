@@ -1,177 +1,255 @@
-import React, { useState, useEffect } from 'react';
-import { Sun, Moon, Settings, BookOpen, Github } from 'lucide-react';
-
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Activity,
+  ArrowUpRight,
+  BarChart3,
+  BookOpen,
+  ChevronRight,
+  History,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Moon,
+  Network,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Phone,
+  Sun,
+  Users,
+  X,
+} from 'lucide-react';
+import { useWorkspaceAuth } from '../components/WorkspaceAuth';
+import { Brand, useTheme } from '../components/WorkspaceUI';
+const groups = [
+  {
+    label: 'Workspace',
+    items: [
+      ['dashboard', 'Dashboard', LayoutDashboard],
+      ['agents', 'Voice Agents', Phone],
+      ['insights', 'Live Insights', Activity],
+      ['history', 'Call History', History],
+    ],
+  },
+  {
+    label: 'Intelligence',
+    items: [
+      ['knowledge', 'Knowledge Base', BookOpen],
+      ['analytics', 'Analytics', BarChart3],
+    ],
+  },
+  {
+    label: 'Manage',
+    items: [
+      ['team', 'Team', Users],
+      ['architecture', 'Architecture', Network],
+    ],
+  },
+];
 export default function AppLayout({ activeTab, setActiveTab, children }) {
-  const [theme, setTheme] = useState('dark');
-
+  const { workspace, user, logout } = useWorkspaceAuth();
+  const { theme, toggleTheme } = useTheme();
+  const [collapsed, setCollapsed] = useState(false);
+  const [logoutError, setLogoutError] = useState('');
+  const mobileNav = useRef(null);
+  const pageFocus = useRef(null);
+  const current = groups
+    .flatMap((group) => group.items)
+    .find((item) => item[0] === activeTab);
+  const groupName = groups.find((group) =>
+    group.items.some((item) => item[0] === activeTab)
+  )?.label;
+  const navigate = (tab) => {
+    setActiveTab(tab);
+    mobileNav.current?.close();
+  };
   useEffect(() => {
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [theme]);
-
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'knowledge', label: 'Knowledge Base' },
-    { id: 'agents', label: 'Voice Agents' },
-    { id: 'insights', label: 'Live Insights' },
-    { id: 'analytics', label: 'Analytics' },
-    { id: 'architecture', label: 'Architecture' },
-  ];
-
-  return (
-    <div className={`min-h-screen transition-colors duration-300 font-sans antialiased flex flex-col ${
-      theme === 'dark' ? 'bg-[#090A0F] text-[#F8FAFC]' : 'bg-[#F8F9FE] text-[#0F172A]'
-    }`}>
-      
-      {/* ─────────────────────────────────────────────────────────────
-          HEADER NAVBAR — MATCHING MOCKUP EXACTLY
-      ───────────────────────────────────────────────────────────── */}
-      <header className={`h-16 border-b sticky top-0 z-50 transition-colors duration-300 ${
-        theme === 'dark' 
-          ? 'bg-[#090A0F]/95 border-white/10' 
-          : 'bg-white/95 border-slate-200 shadow-sm'
-      } backdrop-blur-md`}>
-        <div className="max-w-[1440px] h-full mx-auto px-6 flex items-center justify-between">
-          
-          {/* Brand Logo */}
-          <div 
-            onClick={() => setActiveTab('dashboard')}
-            className="flex items-center space-x-3 cursor-pointer group"
+    document.title = `${current?.[1] || 'Workspace'} · Veyra`;
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    pageFocus.current?.focus({ preventScroll: true });
+  }, [activeTab]);
+  const navigation = (mobile = false) => (
+    <>
+      <div className="sidebar-brand">
+        <button
+          aria-label="Veyra dashboard"
+          onClick={() => navigate('dashboard')}
+        >
+          <Brand compact={collapsed && !mobile} />
+        </button>
+        {mobile && (
+          <button
+            className="icon-button"
+            aria-label="Close navigation"
+            onClick={() => mobileNav.current.close()}
           >
-            <span className={`text-xl font-bold tracking-tight ${
-              theme === 'dark' ? 'text-white' : 'text-[#0F172A]'
-            }`}>
-              Veyra
-            </span>
-          </div>
-
-          {/* Navigation Links */}
-          <nav className="hidden lg:flex items-center space-x-1 sm:space-x-2">
-            {navItems.map((item) => {
-              const isActive = activeTab === item.id;
-              return (
+            <X size={20} />
+          </button>
+        )}
+      </div>
+      <div className="workspace-switch" title={workspace.name}>
+        <span className="workspace-avatar">
+          {workspace.name.slice(0, 1).toUpperCase()}
+        </span>
+        <span className="nav-copy min-w-0">
+          <strong className="truncate block">{workspace.name}</strong>
+          <span>Workspace</span>
+        </span>
+      </div>
+      <nav
+        aria-label={mobile ? 'Mobile navigation' : 'Main navigation'}
+        className="sidebar-nav"
+      >
+        {groups.map((group) => (
+          <div className="nav-group" key={group.label}>
+            <p className="nav-group-label">{group.label}</p>
+            {group.items
+              .filter(([id]) => id !== 'team' || user.role === 'admin')
+              .map(([id, label, Icon]) => (
                 <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  className={`relative px-3.5 py-1.5 text-sm font-medium transition-all duration-200 rounded-md ${
-                    isActive
-                      ? 'text-white border-b-2 border-blue-500 font-semibold'
-                      : theme === 'dark'
-                        ? 'text-slate-400 hover:text-white'
-                        : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                  key={id}
+                  className={`nav-item ${activeTab === id ? 'is-active' : ''}`}
+                  aria-current={activeTab === id ? 'page' : undefined}
+                  title={label}
+                  onClick={() => navigate(id)}
                 >
-                  <span>{item.label}</span>
+                  <Icon size={18} strokeWidth={1.7} aria-hidden="true" />
+                  <span className="nav-copy">{label}</span>
+                  {activeTab === id && (
+                    <span className="nav-active-dot nav-copy" />
+                  )}
                 </button>
-              );
-            })}
-          </nav>
-
-          {/* Right Action Buttons */}
-          <div className="flex items-center space-x-3">
-            <a 
-              href="#docs" 
-              className={`hidden sm:inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
-                theme === 'dark' 
-                  ? 'border-white/15 bg-white/5 text-white hover:bg-white/10' 
-                  : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              <span>Documentation</span>
-            </a>
-
-            <a 
-              href="https://github.com/Kushal1213"
-              target="_blank" 
-              rel="noreferrer"
-              className={`hidden sm:inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
-                theme === 'dark' 
-                  ? 'border-white/15 bg-white/5 text-white hover:bg-white/10' 
-                  : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              <span>GitHub</span>
-            </a>
-
-            {/* Dark / Light Mode Switcher */}
+              ))}
+          </div>
+        ))}
+      </nav>
+      <div className="sidebar-bottom">
+        <div className="sidebar-note nav-copy">
+          <span className="mini-wave" aria-hidden="true">
+            {[8, 16, 24, 12, 20, 30, 18, 10, 22, 14, 6].map((height, index) => (
+              <i key={index} style={{ height }} />
+            ))}
+          </span>
+          <p>
+            Every conversation.
+            <br />
+            <strong>A clearer picture.</strong>
+          </p>
+        </div>
+        <div className="account-row">
+          <span className="account-avatar" aria-hidden="true">
+            {user.email.slice(0, 1).toUpperCase()}
+          </span>
+          <span className="nav-copy min-w-0 flex-1">
+            <strong className="truncate block" title={user.email}>
+              {user.email.split('@')[0]}
+            </strong>
+            <span className="capitalize">{user.role}</span>
+          </span>
+          <button
+            className="icon-button"
+            aria-label="Sign out"
+            title="Sign out"
+            onClick={async () => {
+              try {
+                await logout();
+              } catch (err) {
+                setLogoutError(err.message);
+              }
+            }}
+          >
+            <LogOut size={16} />
+          </button>
+        </div>
+      </div>
+    </>
+  );
+  return (
+    <div className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`}>
+      <a href="#main-content" className="skip-link">
+        Skip to content
+      </a>
+      <aside
+        className="desktop-sidebar"
+        aria-label="Workspace navigation sidebar"
+      >
+        {navigation()}
+      </aside>
+      <dialog
+        className="mobile-sidebar"
+        ref={mobileNav}
+        onClick={(event) => {
+          if (event.target === mobileNav.current) mobileNav.current.close();
+        }}
+        aria-label="Workspace navigation"
+      >
+        <div className="mobile-sidebar-content">{navigation(true)}</div>
+      </dialog>
+      <div className="app-body">
+        <header className="workspace-topbar">
+          <div className="flex items-center gap-3 min-w-0">
             <button
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className={`p-2 rounded-lg border transition-all ${
-                theme === 'dark'
-                  ? 'bg-white/5 border-white/10 text-slate-300 hover:text-white hover:bg-white/10'
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-              }`}
-              title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+              className="icon-button mobile-menu-button"
+              aria-label="Open navigation"
+              onClick={() => mobileNav.current.showModal()}
             >
-              {theme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+              <Menu size={19} />
             </button>
-
-            {/* Settings Icon */}
             <button
-              className={`p-2 rounded-lg border transition-all ${
-                theme === 'dark'
-                  ? 'bg-white/5 border-white/10 text-slate-300 hover:text-white hover:bg-white/10'
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-              }`}
-              title="Settings"
+              className="icon-button desktop-collapse"
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              onClick={() => setCollapsed((value) => !value)}
             >
-              <Settings className="w-4 h-4" />
+              {collapsed ? (
+                <PanelLeftOpen size={18} />
+              ) : (
+                <PanelLeftClose size={18} />
+              )}
+            </button>
+            <div className="breadcrumb">
+              <span>{groupName}</span>
+              <ChevronRight size={13} />
+              <strong>{current?.[1]}</strong>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="topbar-caption">Voice intelligence workspace</span>
+            <button
+              className="icon-button theme-toggle"
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+              onClick={toggleTheme}
+            >
+              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
             </button>
           </div>
-
-        </div>
-
-        {/* Mobile Nav Drawer / Horizontal Scroll */}
-        <div className="flex lg:hidden overflow-x-auto px-4 py-2 space-x-2 border-t border-white/10 bg-[#090A0F]/90">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`px-3 py-1 text-xs rounded-md whitespace-nowrap ${
-                activeTab === item.id ? 'bg-blue-600 text-white' : 'text-slate-400 bg-white/5'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      </header>
-
-      {/* Main Workspace Container */}
-      <main className="flex-1 w-full">
-        {children}
-      </main>
-
-      {/* ─────────────────────────────────────────────────────────────
-          FOOTER — MATCHING MOCKUP IMAGE 2 EXACTLY
-      ───────────────────────────────────────────────────────────── */}
-      <footer className={`border-t py-12 px-6 transition-colors duration-300 ${
-        theme === 'dark'
-          ? 'bg-[#0E0F14] border-white/10 text-slate-400'
-          : 'bg-white border-slate-200 text-slate-600'
-      }`}>
-        <div className="max-w-[1440px] mx-auto space-y-6">
-          <div className="space-y-2">
-            <h3 className="text-xl font-bold text-white tracking-tight">Veyra</h3>
-            <p className="text-sm text-slate-400">
-              © 2024 Veyra. AI agents that understand every customer conversation.
+        </header>
+        <main
+          id="main-content"
+          ref={pageFocus}
+          tabIndex={-1}
+          className="workspace-main"
+        >
+          {logoutError && (
+            <p role="alert" className="notice notice-error mx-6 mt-6">
+              {logoutError}
             </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-6 pt-4 text-sm text-slate-400">
-            <a href="#" className="hover:text-white transition-colors">Documentation</a>
-            <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
-            <a href="#" className="hover:text-white transition-colors">API Reference</a>
-            <a href="#" className="hover:text-white transition-colors">Status</a>
-            <a href="#" className="hover:text-white transition-colors">Support</a>
-          </div>
-        </div>
-      </footer>
-
+          )}
+          {children}
+        </main>
+        <footer className="workspace-footer">
+          <span>
+            Veyra <span className="text-muted">/</span> Conversation
+            intelligence
+          </span>
+          <button
+            className="text-action"
+            onClick={() => navigate('architecture')}
+          >
+            System overview
+            <ArrowUpRight size={13} />
+          </button>
+        </footer>
+      </div>
     </div>
   );
 }

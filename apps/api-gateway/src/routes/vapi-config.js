@@ -47,7 +47,7 @@ router.get('/assistant-config', async (req, res) => {
     if (privateKey && privateKey !== 'your_vapi_api_key') {
       try {
         const assistantPayload = {
-          name: `Veyra-${agent.name}-${market}`,
+          name: `Veyra-${process.env.VEYRA_TENANT_ID ? process.env.VEYRA_TENANT_ID + '-' : ''}${agent.name}-${market}`,
           firstMessage: `Hello! I'm ${agent.name}, your Veyra financial assistant. How can I help you today?`,
           transcriber: {
             provider: 'deepgram',

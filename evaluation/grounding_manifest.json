@@ -1,0 +1,69 @@
+{
+  "version": "2026-09-26-fixture-1",
+  "mode": "fixture-lexical",
+  "description": "Provider-free grounding checks for market, product, publication, and abstention behavior. This is a starter release gate, not a production accuracy claim.",
+  "cases": [
+    {
+      "id": "answer-india-loan-documents",
+      "question": "What documents are required for an India personal loan?",
+      "market": "india",
+      "product": "loan",
+      "expected_action": "answer",
+      "expected_sources": ["fixture-india-loan-policy"],
+      "forbidden_markets": ["philippines", "indonesia"],
+      "risk_category": "answerable",
+      "reviewer": "fixture-reviewer"
+    },
+    {
+      "id": "answer-india-insurance-grace",
+      "question": "What is the insurance grace period?",
+      "market": "india",
+      "product": "insurance",
+      "expected_action": "answer",
+      "expected_sources": ["fixture-india-insurance-policy"],
+      "forbidden_sources": ["fixture-ph-bancassurance-policy"],
+      "risk_category": "answerable",
+      "reviewer": "fixture-reviewer"
+    },
+    {
+      "id": "abstain-wrong-product",
+      "question": "What is the insurance grace period?",
+      "market": "india",
+      "product": "loan",
+      "expected_action": "abstain",
+      "forbidden_sources": ["fixture-india-insurance-policy", "fixture-ph-bancassurance-policy"],
+      "risk_category": "wrong-product",
+      "reviewer": "fixture-reviewer"
+    },
+    {
+      "id": "abstain-wrong-market",
+      "question": "What coverage periods are available in Philippines bancassurance?",
+      "market": "india",
+      "product": "insurance",
+      "expected_action": "abstain",
+      "forbidden_sources": ["fixture-ph-bancassurance-policy"],
+      "forbidden_markets": ["philippines"],
+      "risk_category": "wrong-market",
+      "reviewer": "fixture-reviewer"
+    },
+    {
+      "id": "abstain-unpublished-source",
+      "question": "What is the zircon loan fee?",
+      "market": "india",
+      "product": "loan",
+      "expected_action": "abstain",
+      "forbidden_sources": ["fixture-draft-loan-policy"],
+      "risk_category": "unpublished-source",
+      "reviewer": "fixture-reviewer"
+    },
+    {
+      "id": "abstain-unsupported-stock-price",
+      "question": "What is the current stock price of HDFC Bank?",
+      "market": "india",
+      "product": "loan",
+      "expected_action": "abstain",
+      "risk_category": "unsupported",
+      "reviewer": "fixture-reviewer"
+    }
+  ]
+}

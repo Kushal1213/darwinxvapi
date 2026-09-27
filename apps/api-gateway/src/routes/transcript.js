@@ -1,6 +1,7 @@
 import express from 'express';
 import { io } from '../index.js';
 import { logger } from '../index.js';
+import { getNudgeStore } from '../services/nudges.js';
 
 const router = express.Router();
 
@@ -44,10 +45,21 @@ router.post('/chunk', (req, res) => {
 router.post('/signal', (req, res) => {
   const { call_id, signals, nudge } = req.body;
 
+  let stored;
+  if (nudge) {
+    if (typeof call_id !== 'string') return res.status(400).json({ error: 'call_id is required' });
+    stored = getNudgeStore().create(call_id, {
+      type: nudge.type || nudge.signal_type, text: nudge.text, priority: nudge.priority,
+      confidence: nudge.confidence, latency_ms: nudge.latency_ms || 0,
+      expires_after_seconds: nudge.expires_after_seconds,
+    });
+  }
+
   io.emit('signal:update', { call_id, signals, nudge, timestamp: Date.now() });
 
   if (nudge) {
-    io.emit('nudge:new', { call_id, nudge, timestamp: Date.now() });
+    if (stored.created) io.emit('nudge', stored.nudge);
+    io.emit('nudge:new', { call_id, nudge: stored.nudge, timestamp: Date.now() });
     logger.info({ call_id, nudge_type: nudge.type }, 'Nudge dispatched');
   }
 

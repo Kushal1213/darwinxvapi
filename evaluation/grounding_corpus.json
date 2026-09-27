@@ -1,0 +1,46 @@
+[
+  {
+    "document_id": "fixture-india-loan",
+    "chunk_id": "fixture-india-loan:documents",
+    "source": "fixture-india-loan-policy",
+    "title": "Fixture India Loan Policy",
+    "market": "india",
+    "product": "personal-loan",
+    "publication_status": "published",
+    "review_status": "approved",
+    "content": "Documents Required:\n- PAN card\n- Aadhaar card\n- Last 3 months salary slips\n- 6 months bank statements\n\nIndia personal loan age minimum is 21."
+  },
+  {
+    "document_id": "fixture-india-insurance",
+    "chunk_id": "fixture-india-insurance:grace",
+    "source": "fixture-india-insurance-policy",
+    "title": "Fixture India Insurance Policy",
+    "market": "india",
+    "product": "life-insurance",
+    "publication_status": "published",
+    "review_status": "approved",
+    "content": "Insurance grace period is 30 days after the premium due date. Lapsed policies require insurer review before reinstatement."
+  },
+  {
+    "document_id": "fixture-ph-insurance",
+    "chunk_id": "fixture-ph-insurance:coverage",
+    "source": "fixture-ph-bancassurance-policy",
+    "title": "Fixture Philippines Bancassurance Policy",
+    "market": "philippines",
+    "product": "bancassurance",
+    "publication_status": "published",
+    "review_status": "approved",
+    "content": "Philippines bancassurance customers may choose term insurance coverage periods of 5, 10, 15, 20, 25, or 30 years."
+  },
+  {
+    "document_id": "fixture-draft-loan",
+    "chunk_id": "fixture-draft-loan:fee",
+    "source": "fixture-draft-loan-policy",
+    "title": "Fixture Draft Loan Policy",
+    "market": "india",
+    "product": "personal-loan",
+    "publication_status": "unpublished",
+    "review_status": "draft",
+    "content": "Draft-only zircon loan fee is 99 rupees. This content must never be used for customer answers."
+  }
+]

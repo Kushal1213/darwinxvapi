@@ -2,11 +2,42 @@ import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
 import { io, logger } from '../index.js';
+import { createCallHistory } from '../services/call-history.js';
+import { getNudgeStore } from '../services/nudges.js';
 
 const router = express.Router();
 
 // In-memory conversation state store
 const conversations = new Map();
+const pendingTurns = new Set();
+let history;
+const callHistory = () => {
+  if (!history) {
+    history = createCallHistory();
+    for (const session of history.active()) conversations.set(session.call_id, session);
+  }
+  return history;
+};
+router.use((_req, _res, next) => { callHistory(); next(); });
+const isLive = (session) => ['created', 'active', 'escalated'].includes(session.status);
+
+function finishSession(callId) {
+  const session = conversations.get(callId);
+  if (!session) return callHistory().get(callId);
+  const finished = {
+    ...session,
+    status: 'completed',
+    ended_at: new Date().toISOString(),
+    summary: buildSummary(session),
+    outcome: session.escalations.length ? 'human_handoff_requested' : 'completed',
+  };
+  callHistory().save(finished);
+  session.status = finished.status;
+  conversations.delete(callId);
+  io.emit('call:ended', { call_id: callId, session: finished, summary: finished.summary });
+  emitLiveCallEnd(callId);
+  return finished;
+}
 
 // ─── Latency Tracking ────────────────────────────────────────
 const latencyHistory = [];
@@ -31,10 +62,30 @@ const MARKET_DETAILS = {
   'id-finance': { label: 'Indonesia Finance', flag: '🇮🇩', agent: 'Dewi (Bahasa Agent)' },
 };
 
+const RAG_SCOPES = {
+  'india-loan': { market: 'india', product: 'loan' },
+  'india-insurance': { market: 'india', product: 'insurance' },
+  'ph-bancassurance': { market: 'philippines', product: 'bancassurance' },
+  'id-finance': { market: 'indonesia', product: 'finance' },
+};
+
 const getRagUrl = () => (process.env.RAG_SERVICE_URL || 'http://localhost:8001').replace(/\/+$/, '');
+
+function scopeForMarket(market) {
+  const key = String(market || '').trim().toLowerCase();
+  const scope = RAG_SCOPES[key];
+  if (!scope) {
+    throw Object.assign(new Error('Unsupported market'), { status: 400 });
+  }
+  return { key, ...scope };
+}
 
 function getOrCreateSession(callId, overrides = {}) {
   if (!conversations.has(callId)) {
+    if (callHistory().get(callId)?.status === 'completed') {
+      throw Object.assign(new Error('This call has ended. Start a new session.'), { status: 409 });
+    }
+    if (overrides.market !== undefined) scopeForMarket(overrides.market);
     conversations.set(callId, createSession(callId, overrides));
   }
   return conversations.get(callId);
@@ -43,7 +94,7 @@ function getOrCreateSession(callId, overrides = {}) {
 function emitTurn(callId, turn) {
   const session = conversations.get(callId);
   if (session) {
-    session.status = 'active';
+    if (session.status === 'created') session.status = 'active';
     session.last_activity = turn.ts || new Date().toISOString();
   }
   io.emit('transcript:update', { call_id: callId, turn });
@@ -103,6 +154,7 @@ function buildLiveCall(session) {
 }
 
 function emitLiveCallUpdate(session) {
+  callHistory().save(session);
   io.emit('insights:call:update', { call: buildLiveCall(session) });
 }
 
@@ -135,25 +187,49 @@ function updateConversationState(session, text) {
   session.state.missing_fields = ['customer_name', 'intent', 'income'].filter((field) => !session.state[field]);
 }
 
-function escalationFor(session, callId, text) {
-  if (!/\b(manager|supervisor|human agent|representative|escalat|complaint|claim rejected)\b/i.test(text)) {
+function escalationFor(session, text) {
+  if (!/\b(manager|supervisor|human|representative|escalat\w*|complaint|claim rejected)\b/i.test(text)) {
     return null;
   }
+  return requestEscalation(session, 'Customer requested human assistance or raised a complaint');
+}
+
+function requestEscalation(session, reason) {
+  if (session.escalations.length) return session.escalations.at(-1);
   const escalation = {
     escalation_id: uuidv4(),
-    call_id: callId,
-    reason: 'Customer requested human assistance or raised a complaint',
-    missing_information: session.state.missing_fields,
+    call_id: session.call_id,
+    reason,
+    customer_intent: session.state.intent,
+    last_customer_message: getLatestTurn(session, 'user'),
+    sources: session.turns.filter((turn) => turn.role === 'assistant').at(-1)?.sources || [],
+    missing_information: [...session.state.missing_fields],
     conversation_summary: buildSummary(session),
     confidence: session.state.confidence,
     timestamp: new Date().toISOString(),
     priority: session.state.frustration_level >= 0.5 ? 'HIGH' : 'NORMAL',
   };
+  session.status = 'escalated';
+  session.state.current_stage = 'escalation';
+  session.escalations.push(escalation);
   io.emit('call:escalated', escalation);
+  emitLiveCallUpdate(session);
   return escalation;
 }
 
-async function runVoiceTurn({ callId, query, market, language, recordUser = true, emitUser = true }) {
+async function runVoiceTurn(options) {
+  if (pendingTurns.has(options.callId)) {
+    throw Object.assign(new Error('A turn is already in progress for this call.'), { status: 409 });
+  }
+  pendingTurns.add(options.callId);
+  try {
+    return await processVoiceTurn(options);
+  } finally {
+    pendingTurns.delete(options.callId);
+  }
+}
+
+async function processVoiceTurn({ callId, query, market, language, recordUser = true, emitUser = true }) {
   const startedAt = Date.now();
   const session = getOrCreateSession(callId, { market, language });
   const userTurn = { role: 'user', content: query, ts: new Date().toISOString() };
@@ -164,27 +240,47 @@ async function runVoiceTurn({ callId, query, market, language, recordUser = true
   }
   if (emitUser) emitTurn(callId, userTurn);
 
+  const handoff = session.escalations.at(-1) || escalationFor(session, query);
+  if (handoff) {
+    session.state.current_stage = 'escalation';
+    const answer = 'Your request for human assistance has been recorded. A team member will need to take over this conversation.';
+    const turn = { role: 'assistant', content: answer, sources: [], ts: new Date().toISOString() };
+    session.turns.push(turn);
+    emitTurn(callId, turn);
+    return { call_id: callId, answer, sources: [], session, escalation: handoff, latency_ms: Date.now() - startedAt };
+  }
+
   // Analysis is intentionally non-blocking. A temporary insights outage must
   // never prevent the customer from receiving a grounded answer.
   feedToInsightsEngine(callId, 'customer', query).catch((err) => {
     logger.warn({ callId, err: err.message }, 'Live insights feed failed');
   });
 
+  const ragScope = scopeForMarket(session.market);
   const ragStartedAt = Date.now();
   const ragResponse = await axios.post(
     `${getRagUrl()}/retrieve`,
-    { query, top_k: 2, session_id: callId, market: session.market, language: session.language },
+    { query, top_k: 2, session_id: callId, market: ragScope.market, product: ragScope.product, language: session.language },
     { timeout: Number(process.env.RAG_REQUEST_TIMEOUT_MS || 10_000) }
   );
   const ragMs = Date.now() - ragStartedAt;
+  if (!isLive(session)) throw Object.assign(new Error('This call has ended.'), { status: 409 });
   const totalMs = Date.now() - startedAt;
-  const answer = ragResponse.data.answer || "I couldn't find that detail in the knowledge base. Let me connect you with a specialist.";
   const sources = ragResponse.data.sources || [];
+  const supportedAnswer = sources.length && !ragResponse.data.abstention_reason;
+  const answer = supportedAnswer && ragResponse.data.answer
+    ? ragResponse.data.answer
+    : 'I could not find supporting knowledge for that question. A request for human assistance has been recorded.';
   const assistantTurn = {
     role: 'assistant', content: answer, sources, latency_ms: totalMs, ts: new Date().toISOString(),
   };
   session.turns.push(assistantTurn);
-  const escalation = escalationFor(session, callId, query);
+  // Retrieval scores are similarity values, not calibrated confidence probabilities.
+  session.state.confidence = null;
+  const escalation = session.escalations.at(-1) || (!supportedAnswer
+    ? requestEscalation(session, ragResponse.data.abstention_reason || 'No supporting knowledge was retrieved')
+    : null);
+  if (!escalation) session.state.current_stage = 'answering';
 
   recordLatency({ call_id: callId, rag_ms: ragMs, total_ms: totalMs });
   emitTurn(callId, assistantTurn);
@@ -194,6 +290,7 @@ async function runVoiceTurn({ callId, query, market, language, recordUser = true
 
   return {
     ...ragResponse.data,
+    answer,
     call_id: callId,
     latency_ms: totalMs,
     session,
@@ -217,13 +314,7 @@ router.post('/webhook', async (req, res) => {
 
   // ── End-of-call report ──
   if (type === 'end-of-call-report') {
-    const session = conversations.get(call_id);
-    if (session) {
-      io.emit('call:ended', { call_id, session, summary: body.summary || null });
-      conversations.delete(call_id);
-      emitLiveCallEnd(call_id);
-      logger.info({ call_id, turns: session.turns.length }, '📞 Call ended');
-    }
+    finishSession(call_id);
     closeInsightsCall(call_id).catch(() => {});
     return res.status(200).json({ status: 'acknowledged' });
   }
@@ -232,6 +323,7 @@ router.post('/webhook', async (req, res) => {
   if (type === 'transcript') {
     const { role, transcript, transcriptType } = message;
     if (transcriptType === 'final' && transcript?.trim()) {
+      if (callHistory().get(call_id)?.status === 'completed') return res.status(200).json({ status: 'ignored', reason: 'Call has ended' });
       // Vapi role names vary by transport (customer/user and
       // assistant/agent/bot). Normalize once so both the session snapshot and
       // the Python detector receive a role they understand.
@@ -354,6 +446,9 @@ function writeSseResponse(res, answer, finishImmediately = false) {
  */
 router.post('/query', async (req, res) => {
   const query = typeof req.body?.query === 'string' ? req.body.query.trim() : '';
+  if (req.body.call_id !== undefined && (typeof req.body.call_id !== 'string' || !req.body.call_id.trim() || req.body.call_id.length > 200)) {
+    return res.status(400).json({ error: 'Invalid call_id' });
+  }
   if (!query || query.length > MAX_QUERY_LENGTH) {
     return res.status(400).json({ error: `query is required and must be under ${MAX_QUERY_LENGTH} characters` });
   }
@@ -368,11 +463,11 @@ router.post('/query', async (req, res) => {
     const result = await runVoiceTurn({ callId, query, market, language });
     return res.json(result);
   } catch (err) {
-    const status = err.code === 'ECONNABORTED' ? 504 : 503;
+    const status = err.status || (err.code === 'ECONNABORTED' ? 504 : 503);
     logger.error({ callId, err: err.message, code: err.code }, 'Voice turn failed');
     return res.status(status).json({
-      error: status === 504 ? 'RAG request timed out' : 'RAG service is unavailable',
-      message: 'The voice service could not complete this turn. Check the RAG service health and try again.',
+      error: status === 409 ? err.message : status === 504 ? 'RAG request timed out' : 'RAG service is unavailable',
+      message: status === 409 ? err.message : 'The voice service could not complete this turn. Check the RAG service health and try again.',
     });
   }
 });
@@ -383,9 +478,14 @@ router.post('/query', async (req, res) => {
  */
 router.post('/session', (req, res) => {
   const { call_id, language = 'en', market = 'india-loan' } = req.body;
-  const id = call_id || uuidv4();
-  const session = createSession(id, { language, market });
-  conversations.set(id, session);
+  const id = call_id === undefined ? uuidv4() : call_id;
+  if (typeof id !== 'string' || !id.trim() || id.length > 200) return res.status(400).json({ error: 'Invalid call_id' });
+  try {
+    scopeForMarket(market);
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message });
+  }
+  const session = getOrCreateSession(id, { language, market });
   emitLiveCallUpdate(session);
   logger.info({ call_id: id }, 'Session created');
   res.json({ call_id: id, session });
@@ -395,7 +495,7 @@ router.post('/session', (req, res) => {
  * GET /api/voice/session/:id
  */
 router.get('/session/:id', (req, res) => {
-  const session = conversations.get(req.params.id);
+  const session = conversations.get(req.params.id) || callHistory().get(req.params.id);
   if (!session) return res.status(404).json({ error: 'Session not found' });
   res.json(session);
 });
@@ -408,7 +508,7 @@ router.get('/session/:id', (req, res) => {
  */
 router.get('/live', (_req, res) => {
   const calls = [...conversations.values()]
-    .filter((session) => session.status !== 'ended')
+    .filter(isLive)
     .sort((left, right) => new Date(right.last_activity) - new Date(left.last_activity))
     .map(buildLiveCall);
   res.json({ calls, timestamp: new Date().toISOString() });
@@ -419,14 +519,18 @@ router.get('/live', (_req, res) => {
  * End browser-owned sessions and release both conversation and insights state.
  */
 router.post('/session/:id/end', (req, res) => {
-  const session = conversations.get(req.params.id);
-  if (session) {
-    io.emit('call:ended', { call_id: req.params.id, session, summary: buildSummary(session) });
-    conversations.delete(req.params.id);
-    emitLiveCallEnd(req.params.id);
-  }
+  const session = finishSession(req.params.id);
   closeInsightsCall(req.params.id).catch(() => {});
   return res.json({ status: 'ended', call_id: req.params.id, existed: Boolean(session) });
+});
+
+router.get('/history', (req, res) => {
+  const limit = Number(req.query.limit ?? 50);
+  const offset = Number(req.query.offset ?? 0);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100 || !Number.isInteger(offset) || offset < 0) {
+    return res.status(400).json({ error: 'limit must be 1-100 and offset must be a nonnegative integer' });
+  }
+  res.json(callHistory().list({ limit, offset }));
 });
 
 /**
@@ -442,19 +546,12 @@ router.get('/latency', (req, res) => {
  */
 router.post('/escalate', (req, res) => {
   const { call_id, reason } = req.body;
-  const session = conversations.get(call_id) || {};
-  const escalation = {
-    escalation_id: uuidv4(),
-    call_id,
-    reason: reason || 'Customer requested human agent',
-    missing_information: session.state?.missing_fields || [],
-    conversation_summary: buildSummary(session),
-    confidence: session.state?.confidence || 0,
-    timestamp: new Date().toISOString(),
-    priority: session.state?.frustration_level > 0.7 ? 'HIGH' : 'NORMAL',
-  };
-  io.emit('call:escalated', escalation);
-  logger.warn(escalation, 'Call escalated');
+  if (typeof call_id !== 'string' || (reason !== undefined && (typeof reason !== 'string' || reason.length > 1000))) {
+    return res.status(400).json({ error: 'A call_id and a reason of at most 1000 characters are required' });
+  }
+  const session = conversations.get(call_id);
+  if (!session) return res.status(404).json({ error: 'Active session not found' });
+  const escalation = requestEscalation(session, reason?.trim() || 'Customer requested human agent');
   res.json(escalation);
 });
 
@@ -476,7 +573,8 @@ async function feedToInsightsEngine(call_id, speaker, text) {
     if (response.data?.nudges && response.data.nudges.length > 0) {
       for (const nudge of response.data.nudges) {
         const session = conversations.get(call_id);
-        if (session) {
+        if (!session || !isLive(session)) continue;
+        if (session && isLive(session)) {
           session.state.last_nudge = {
             type: nudge.signal_type,
             priority: nudge.priority,
@@ -496,20 +594,23 @@ async function feedToInsightsEngine(call_id, speaker, text) {
           session.last_activity = new Date().toISOString();
           emitLiveCallUpdate(session);
         }
-        io.emit('nudge', {
-          call_id,
+        let result;
+        try { result = getNudgeStore().create(call_id, {
           type: nudge.signal_type,
           priority: nudge.priority,
           text: nudge.text,
           confidence: nudge.confidence,
           latency_ms: nudge.end_to_end_latency_ms_excl_asr || 0,
-          ts: new Date().toISOString(),
-        });
+          expires_after_seconds: nudge.expires_after_seconds || 45,
+        }); } catch (error) {
+          if (error.status === 409) continue;
+          throw error;
+        }
+        if (result.created) io.emit('nudge', result.nudge);
       }
     }
   } catch (err) {
-    // Silently degrade if port 8003 is not running — the system continues to work
-    // for Q1–Q3, only Q4 real-time nudges are unavailable.
+    logger.warn({ call_id, error: err.message }, 'Live nudge processing unavailable');
   }
 }
 
@@ -523,10 +624,12 @@ async function closeInsightsCall(callId) {
 function createSession(call_id, overrides = {}) {
   return {
     call_id,
+    workspace_id: 'default',
     created_at: new Date().toISOString(),
     language: overrides.language || 'en',
     market: overrides.market || 'india-loan',
     turns: [],
+    escalations: [],
     state: {
       customer_name: null,
       intent: null,
@@ -534,14 +637,14 @@ function createSession(call_id, overrides = {}) {
       income: null,
       loan_amount: null,
       current_stage: 'greeting',
-      confidence: 1.0,
+      confidence: null,
       frustration_level: 0,
       compliance_risk: false,
       compliance_rule: 'NONE',
       last_nudge: null,
       missing_fields: [],
     },
-    status: 'active',
+    status: 'created',
     last_activity: new Date().toISOString(),
   };
 }
