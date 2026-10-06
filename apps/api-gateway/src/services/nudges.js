@@ -10,6 +10,8 @@ const inputSchema = z.object({
   suggested_response: z.string().trim().min(1).max(8000).optional(),
   context_query: z.string().trim().min(1).max(8000).optional(),
   sources: z.array(z.record(z.unknown())).max(5).optional().default([]),
+  origin: z.enum(['customer_turn', 'operator_query']).optional().default('customer_turn'),
+  requested_by: z.string().trim().min(1).max(200).nullable().optional().default(null),
   latency_ms: z.number().min(0).optional().default(0),
   expires_after_seconds: z.number().min(1).max(300).optional().default(45),
 });
@@ -93,22 +95,29 @@ export function createNudgeStore(db = getDatabase(), now = () => Date.now()) {
       expire();
       return read(id);
     },
-    apply(id, actor, persistTurn) {
+    apply(id, actor, options, persistTurn) {
       expire();
       const nudge = read(id);
       if (!nudge) fail(404, 'Nudge not found');
       if (nudge.type !== 'knowledge_tip' || !nudge.suggested_response) fail(409, 'This nudge cannot guide a response');
       if (nudge.status === 'applied') return { nudge, applied: false };
       if (!active(nudge)) fail(409, 'This nudge is already resolved or expired');
+      const appliedResponse = typeof options?.responseText === 'string'
+        ? options.responseText.trim()
+        : nudge.suggested_response;
+      if (!appliedResponse || appliedResponse.length > 8000) fail(400, 'Applied response must be between 1 and 8000 characters');
+      if (typeof persistTurn !== 'function') fail(500, 'A persistence callback is required');
       const updated = {
         ...nudge,
         status: 'applied',
+        applied_response: appliedResponse,
+        was_edited: appliedResponse !== nudge.suggested_response,
         acted_by: actor,
         acted_at: stamp(),
         updated_at: stamp(),
       };
       transaction(() => {
-        persistTurn(nudge);
+        persistTurn(nudge, appliedResponse);
         save(updated, 'applied', actor);
       });
       return { nudge: updated, applied: true };

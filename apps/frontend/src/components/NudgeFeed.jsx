@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, Play, Sparkles, X, RefreshCw } from 'lucide-react';
+import { Check, Copy, Play, RotateCcw, Sparkles, X, RefreshCw } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { EmptyState, LoadingState } from './WorkspaceUI';
 
@@ -7,7 +7,7 @@ const isActive = (nudge) =>
   ['created', 'displayed'].includes(nudge.status) &&
   Date.parse(nudge.expires_at) > Date.now();
 
-export default function NudgeFeed({ callId = null, review = false, onApply = null, title = 'Operator nudges' }) {
+export default function NudgeFeed({ callId = null, review = false, onApply = null, applyLabel = 'Use this reply', title = 'Operator nudges' }) {
   const [nudges, setNudges] = useState([]);
   const [view, setView] = useState(review ? 'all' : 'active');
   const [loading, setLoading] = useState(true);
@@ -95,12 +95,12 @@ export default function NudgeFeed({ callId = null, review = false, onApply = nul
     }
   }
 
-  async function applyNudge(nudge) {
+  async function applyNudge(nudge, responseText) {
     if (!onApply) return;
     const current = generation.current;
     setBusy((previous) => ({ ...previous, [nudge.id]: true }));
     try {
-      await onApply(nudge);
+      await onApply(nudge, responseText);
       if (current === generation.current) {
         setActionError('');
         setRevision((value) => value + 1);
@@ -178,6 +178,7 @@ export default function NudgeFeed({ callId = null, review = false, onApply = nul
             busy={busy[nudge.id]}
             onAction={act}
             onApply={onApply ? applyNudge : null}
+            applyLabel={applyLabel}
             showCall={!callId}
           />
         ))}
@@ -186,15 +187,22 @@ export default function NudgeFeed({ callId = null, review = false, onApply = nul
   );
 }
 
-function NudgeRow({ nudge, busy, onAction, onApply, showCall }) {
+function NudgeRow({ nudge, busy, onAction, onApply, applyLabel, showCall }) {
   const displayed = useRef(false);
+  const [draft, setDraft] = useState(nudge.applied_response || nudge.suggested_response || '');
+  const [copyStatus, setCopyStatus] = useState('');
   useEffect(() => {
     if (nudge.status === 'created' && isActive(nudge) && !displayed.current) {
       displayed.current = true;
       onAction(nudge.id, 'displayed');
     }
   }, [nudge.id, nudge.status, onAction]);
+  useEffect(() => {
+    setDraft(nudge.applied_response || nudge.suggested_response || '');
+    setCopyStatus('');
+  }, [nudge.id, nudge.applied_response, nudge.suggested_response]);
   const active = isActive(nudge);
+  const edited = Boolean(nudge.suggested_response) && draft.trim() !== nudge.suggested_response.trim();
   const status =
     ['created', 'displayed'].includes(nudge.status) && !active
       ? 'expired'
@@ -220,11 +228,39 @@ function NudgeRow({ nudge, busy, onAction, onApply, showCall }) {
       {nudge.type === 'knowledge_tip' && nudge.suggested_response && (
         <div className="signal-tile space-y-2">
           <p className="text-xs font-semibold flex items-center gap-2">
-            <Sparkles size={14} className="text-accent" /> Suggested reply
+            <Sparkles size={14} className="text-accent" />
+            {nudge.origin === 'operator_query' ? 'Private Ask Veyra result' : 'Suggested reply'}
           </p>
-          <p className="text-sm whitespace-pre-wrap break-words">
-            {nudge.suggested_response}
-          </p>
+          {nudge.context_query && nudge.origin === 'operator_query' && (
+            <p className="text-xs text-muted">Private question: {nudge.context_query}</p>
+          )}
+          {active && onApply ? (
+            <label className="block text-xs text-muted">
+              Review or edit before delivery
+              <textarea
+                value={draft}
+                maxLength={8000}
+                rows={5}
+                disabled={busy}
+                onChange={(event) => setDraft(event.target.value)}
+                className="field mt-2 min-h-28 resize-y text-sm leading-6"
+              />
+              <span className="mt-1 flex justify-between gap-3 text-[10px]">
+                <span>{edited ? 'Edited wording will be preserved with the original.' : 'Generated wording is unchanged.'}</span>
+                <span>{draft.length}/8000</span>
+              </span>
+            </label>
+          ) : (
+            <p className="text-sm whitespace-pre-wrap break-words">
+              {nudge.applied_response || nudge.suggested_response}
+            </p>
+          )}
+          {!active && nudge.was_edited && (
+            <details className="text-xs text-muted">
+              <summary>View original generated reply</summary>
+              <p className="mt-2 whitespace-pre-wrap">{nudge.suggested_response}</p>
+            </details>
+          )}
           {nudge.sources?.length > 0 && (
             <p className="text-[10px] text-muted">
               Grounded in {nudge.sources.map((source) => source.title || source.source || 'knowledge').join(', ')}
@@ -236,13 +272,40 @@ function NudgeRow({ nudge, busy, onAction, onApply, showCall }) {
         {active && (
           <>
             {nudge.type === 'knowledge_tip' && onApply ? (
-              <button
-                disabled={busy}
-                onClick={() => onApply(nudge)}
-                className="btn btn-primary"
-              >
-                <Play size={15} /> Use this reply
-              </button>
+              <>
+                <button
+                  disabled={busy || !draft.trim()}
+                  onClick={() => onApply(nudge, draft.trim())}
+                  className="btn btn-primary"
+                >
+                  <Play size={15} /> {applyLabel}
+                </button>
+                <button
+                  disabled={busy || !draft.trim()}
+                  onClick={async () => {
+                    try {
+                      if (!navigator.clipboard?.writeText) throw new Error('Clipboard access is unavailable');
+                      await navigator.clipboard.writeText(draft.trim());
+                      setCopyStatus('Copied');
+                    } catch (_) {
+                      setCopyStatus('Copy unavailable');
+                    }
+                  }}
+                  className="btn"
+                >
+                  <Copy size={15} /> Copy
+                </button>
+                {edited && (
+                  <button
+                    disabled={busy}
+                    onClick={() => setDraft(nudge.suggested_response)}
+                    className="btn"
+                  >
+                    <RotateCcw size={15} /> Reset
+                  </button>
+                )}
+                {copyStatus && <span role="status" className="text-xs text-muted">{copyStatus}</span>}
+              </>
             ) : nudge.type !== 'knowledge_tip' ? (
               <button
                 disabled={busy}

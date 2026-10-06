@@ -36,6 +36,31 @@ Important changes from the previous plan:
 | Providers | Maintained `google-genai` SDK adapter, pinned dependencies, and provider-free contract tests | Account/region availability, limits, terms, and authorized live smoke tests |
 | Verification | 34 gateway + 19 Python + 2 tenant tests, seven-case grounding gate, provider inventory test, and frontend production build passed on 2026-10-06 | Live-provider quality and customer-reviewed corpus remain unproven |
 
+## Live Assistance Expansion Roadmap — 2026-10-06
+
+The next product expansion builds on operator-guided grounded replies without
+turning Veyra into an autonomous lending or servicing system. Work should proceed
+in this order, with each delivered response remaining human-controlled and cited.
+
+| Order | Capability | Delivery slice | Exit evidence |
+| --- | --- | --- | --- |
+| 1 | Private Ask Veyra | Operator-only knowledge search that never enters the customer transcript; editable reply preview; copy or explicit delivery; original and delivered wording retained | Transcript isolation, edit attribution, replay, handoff, expiry, and browser interaction tests |
+| 2 | Intent-driven playbooks | Versioned market/product playbooks with clarification, disclosure, knowledge, and escalation steps | Customer-approved playbook fixtures; deterministic state recovery; no autonomous external actions |
+| 3 | Guidance measurement | Display, selection, edit, dismissal, latency, source, and outcome metrics with denominators | Workspace dashboard and export; usefulness separated from correctness review |
+| 4 | Evidence-linked after-call work | Versioned summary drafts, structured follow-ups, and links to transcript turns and knowledge evidence | Retryable generation, human acceptance/edit audit, curated accuracy review |
+| 5 | Disclosure checklist shadow mode | Customer-owned, effective-dated checklist with observed/missing/uncertain evidence states | Legal/policy owner approval and reviewed false-positive/negative set before live warnings |
+| 6 | QA and coaching | Immutable manual rubrics, sampling, evidence-linked findings, and coaching history | Reviewer attribution, rubric versioning, disagreement and sample-size reporting |
+| 7 | Supervisor and system integrations | Private supervisor guidance, controlled takeover, one selected CRM context adapter, and one external handoff destination | Named customer systems, least-privilege access, idempotent callbacks, failure runbooks |
+| 8 | Evaluated language expansion | Code-switch and locale-specific guidance evaluated independently per market | Native-speaker review and market-specific held-out gates |
+
+Order 1's first local slice is implemented: private scoped search, explicit
+abstention, editable/copyable cited replies, controlled voice/text delivery, and
+original-versus-delivered audit evidence. “Speak”, “add”, or any later external
+action must remain an explicit operator decision. Editing a generated reply does
+not establish that the edit is supported; sentence-level support warnings and
+browser evaluation remain follow-up work and must not be represented as a
+compliance determination.
+
 Evidence inspected for this revision:
 
 - [RAG service](../services/rag-service/main.py): market/product filters are now hard eligibility checks; answer synthesis and corpus quality still need reviewed evaluation.
@@ -380,6 +405,21 @@ Still open: time-of-day and locale-specific activation, automatic rollback or su
 - An end-to-end fixture publishes a PDF, retrieves a fact unique to page 3, and verifies the returned page and excerpt. Previously indexed PDFs remain immutable and require a new revision to gain page metadata.
 
 Still open: OCR for scanned PDFs, printed-label mapping when it differs from the physical PDF page, and bounding-box or highlight coordinates.
+
+### Live Guidance Console first slice — 2026-10-06
+
+- Operators can ask a private, call-scoped knowledge question without adding an
+  artificial customer turn, changing customer facts, feeding the signal detector,
+  or increasing customer knowledge-gap counts.
+- Supported results become cited guidance tips; unsupported searches abstain.
+- Active tips expose an editable composer plus copy and explicit voice/text delivery.
+- The nudge retains immutable generated wording, final delivered wording, edit state,
+  sources, authenticated operator, and timestamps. Replays return the first delivery.
+- Automated tests cover transcript isolation, edited delivery, idempotency, invalid
+  text, abstention, handoff blocking, evidence retention, and queue capacity.
+
+Still open: browser interaction evaluation, edit-support warnings, playbooks,
+guidance analytics, reason-coded rejection, and delivery modes beyond speak/add/copy.
 
 ## Definition of Product Progress
 

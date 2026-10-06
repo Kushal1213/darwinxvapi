@@ -33,6 +33,17 @@ slots. Tips cannot be applied after expiry, dismissal, call completion, or while
 handoff is active. The browser may interrupt its current local speech to speak the newly
 applied tip, but the server never rewrites a previously recorded turn.
 
+Operators may also use **Ask Veyra privately** during an active session. This
+call-scoped query uses the session's fixed retrieval scope but is not appended to the
+customer transcript, sent to the signal detector, or counted as a customer knowledge
+gap. A supported result becomes the same one-active knowledge tip; an unsupported
+result returns an explicit private abstention.
+
+Before applying an active tip, the operator may edit its wording or copy it without
+changing the call. Applying records the immutable generated wording, final delivered
+wording, edit flag, authenticated operator, citations, and exactly one assistant turn.
+An idempotent replay returns that first delivered turn and cannot replace its wording.
+
 ## Queue Rules
 
 - The gateway assigns a UUID and records call ID, signal type, text, priority,
@@ -59,8 +70,9 @@ applied tip, but the server never rewrites a previously recorded turn.
 | `POST /api/nudges/:id/actions` | Body `{ "action": "acknowledged" }`, or another lifecycle/feedback action |
 | `GET /api/nudges/:id/events` | Ordered lifecycle and feedback history with actor and timestamp |
 | `POST /api/voice/session/:callId/nudges/:id/apply` | Apply one active grounded guidance tip |
+| `POST /api/voice/session/:callId/guidance/query` | Run a private operator knowledge search without creating a customer turn |
 
-All three require the workspace's cookie session. Mutations also require an
+All endpoints require the workspace's cookie session. Mutations also require an
 allowed Origin. The provider callback token cannot read or modify operator
 feedback through these endpoints.
 

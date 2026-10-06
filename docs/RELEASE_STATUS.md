@@ -15,6 +15,7 @@ because local tests pass.
 - Durable internal handoff inbox with atomic creation, idempotency, acknowledgement, resolution, and audit events.
 - Knowledge-gap grouping and triage with privacy-minimized excerpts, recurrence counts, reopen behavior, and published-revision validation.
 - Operator-guided grounded replies that pause, preview, apply, render, and speak with citation and actor attribution.
+- Private operator knowledge search plus editable/copyable grounded replies that preserve generated and delivered wording without adding artificial customer turns.
 - Maintained Google Gen AI SDK adapter and provider-free contract/grounding tests.
 - Zero advisories in the npm production dependency graph on the review date.
 
@@ -35,6 +36,8 @@ These cannot be completed truthfully from repository code alone:
 - The internal handoff inbox is not a telephony transfer or an external connector.
 - OCR, automated retention/deletion, distributed workers, MFA/SSO, password recovery,
   evidence-linked structured summaries, QA rubrics, and operational kill switches remain roadmap items.
+- Edited guidance is attributed and preserved but does not yet receive sentence-level
+  evidence validation; the operator remains responsible for confirming edits.
 - Development-only audit advisories remain in the Vite 5 and Tailwind 3 toolchain;
   development servers must stay private until tested major migrations are completed.
 

@@ -72,16 +72,22 @@ test('grounded knowledge tips apply once and retain their evidence', () => {
     sources: [{ source: 'loan-policy', chunk_id: 'income-1', page: 7 }],
   });
   let persisted = 0;
-  const first = store.apply(nudge.id, 'operator', () => { persisted += 1; });
+  const first = store.apply(nudge.id, 'operator', { responseText: 'Use the approved income requirement from the policy.' }, (_tip, appliedResponse) => {
+    persisted += 1;
+    assert.equal(appliedResponse, 'Use the approved income requirement from the policy.');
+  });
   assert.equal(first.applied, true);
   assert.equal(first.nudge.status, 'applied');
+  assert.equal(first.nudge.was_edited, true);
+  assert.equal(first.nudge.applied_response, 'Use the approved income requirement from the policy.');
   assert.equal(first.nudge.sources[0].page, 7);
-  const replay = store.apply(nudge.id, 'operator', () => { persisted += 1; });
+  const replay = store.apply(nudge.id, 'operator', { responseText: 'A replay cannot replace the delivered wording.' }, () => { persisted += 1; });
   assert.equal(replay.applied, false);
+  assert.equal(replay.nudge.applied_response, 'Use the approved income requirement from the policy.');
   assert.equal(persisted, 1);
   assert.deepEqual(store.events(nudge.id).map((event) => event.action), ['created', 'applied']);
   const ordinary = store.create('guided', payload).nudge;
-  assert.throws(() => store.apply(ordinary.id, 'operator', () => {}), { status: 409 });
+  assert.throws(() => store.apply(ordinary.id, 'operator', {}, () => {}), { status: 409 });
 });
 
 test('new guidance replaces stale guidance without consuming safety-alert capacity', () => {

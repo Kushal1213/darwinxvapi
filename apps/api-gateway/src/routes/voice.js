@@ -623,11 +623,90 @@ router.post('/session/:id/end', (req, res) => {
 });
 
 /**
+ * POST /api/voice/session/:id/guidance/query
+ * Run a private operator knowledge search. The question and result stay outside
+ * the customer transcript until an operator explicitly applies the resulting tip.
+ */
+router.post('/session/:id/guidance/query', async (req, res) => {
+  const query = typeof req.body?.query === 'string' ? req.body.query.trim() : '';
+  if (!query || query.length > MAX_QUERY_LENGTH) {
+    return res.status(400).json({ error: `query is required and must be under ${MAX_QUERY_LENGTH} characters` });
+  }
+  const session = conversations.get(req.params.id);
+  if (!session || !isLive(session)) return res.status(404).json({ error: 'Active session not found' });
+  if (activeEscalation(session)) return res.status(409).json({ error: 'Resolve the human handoff before requesting automated guidance' });
+  if (pendingTurns.has(session.call_id)) return res.status(409).json({ error: 'A turn is already in progress for this call.' });
+
+  pendingTurns.add(session.call_id);
+  const startedAt = Date.now();
+  try {
+    const ragScope = scopeForMarket(session.market);
+    const ragResponse = await axios.post(
+      `${getRagUrl()}/retrieve`,
+      { query, top_k: 2, session_id: session.call_id, market: ragScope.market, product: ragScope.product, language: session.language },
+      { timeout: Number(process.env.RAG_REQUEST_TIMEOUT_MS || 10_000) }
+    );
+    if (!isLive(session)) return res.status(409).json({ error: 'This call has ended.' });
+    const supported = Boolean(ragResponse.data.sources?.length && !ragResponse.data.abstention_reason && ragResponse.data.answer);
+    const latencyMs = Date.now() - startedAt;
+    recordLatency({ call_id: session.call_id, rag_ms: latencyMs, total_ms: latencyMs, operator_guidance: true });
+    if (!supported) {
+      return res.json({
+        call_id: session.call_id,
+        response_kind: 'guidance_abstention',
+        suggestion: null,
+        abstention_reason: ragResponse.data.abstention_reason || 'insufficient_support',
+        message: 'No approved knowledge supports that private question. Rephrase it or request human assistance.',
+        latency_ms: latencyMs,
+      });
+    }
+    const sources = ragResponse.data.sources;
+    const documentNames = [...new Set(sources.map((source) => source.title || source.source).filter(Boolean))];
+    const result = getNudgeStore().create(session.call_id, {
+      type: 'knowledge_tip',
+      text: documentNames.length
+        ? `Private guidance ready from ${documentNames.join(', ')}.`
+        : 'Private grounded guidance is ready.',
+      priority: 'MEDIUM',
+      confidence: null,
+      suggested_response: ragResponse.data.answer,
+      context_query: query,
+      sources,
+      origin: 'operator_query',
+      requested_by: req.session.userId,
+      expires_after_seconds: 180,
+    });
+    session.state.current_stage = 'awaiting_guidance';
+    emitLiveCallUpdate(session);
+    if (result.created) io.emit('nudge', result.nudge);
+    return res.json({
+      call_id: session.call_id,
+      response_kind: 'guided_suggestion',
+      suggestion: result.nudge,
+      sources,
+      latency_ms: latencyMs,
+    });
+  } catch (error) {
+    const status = error.status || (error.code === 'ECONNABORTED' ? 504 : 503);
+    logger.error({ call_id: session.call_id, err: error.message, code: error.code }, 'Private guidance query failed');
+    return res.status(status).json({
+      error: status === 409 ? error.message : status === 504 ? 'RAG request timed out' : 'RAG service is unavailable',
+    });
+  } finally {
+    pendingTurns.delete(session.call_id);
+  }
+});
+
+/**
  * POST /api/voice/session/:id/nudges/:nudgeId/apply
  * Commit a reviewed grounded tip as the next assistant turn. Replays return the
  * original turn, while expired, dismissed, cross-call, and handoff-paused tips fail.
  */
 router.post('/session/:id/nudges/:nudgeId/apply', (req, res) => {
+  const responseText = req.body?.response_text;
+  if (responseText !== undefined && (typeof responseText !== 'string' || !responseText.trim() || responseText.trim().length > MAX_QUERY_LENGTH)) {
+    return res.status(400).json({ error: `response_text must be between 1 and ${MAX_QUERY_LENGTH} characters` });
+  }
   const session = conversations.get(req.params.id);
   if (!session || !isLive(session)) return res.status(404).json({ error: 'Active session not found' });
   if (activeEscalation(session)) return res.status(409).json({ error: 'Resolve the human handoff before applying an automated tip' });
@@ -644,13 +723,16 @@ router.post('/session/:id/nudges/:nudgeId/apply', (req, res) => {
   let appended = false;
   let turn;
   try {
-    const result = store.apply(current.id, req.session.userId, (nudge) => {
+    const result = store.apply(current.id, req.session.userId, { responseText }, (nudge, appliedResponse) => {
       turn = {
         role: 'assistant',
-        content: nudge.suggested_response,
+        content: appliedResponse,
         sources: nudge.sources || [],
         response_kind: 'guided',
         guided_by_nudge_id: nudge.id,
+        guided_by_user_id: req.session.userId,
+        guided_was_edited: appliedResponse !== nudge.suggested_response,
+        guided_original_response: appliedResponse !== nudge.suggested_response ? nudge.suggested_response : undefined,
         ts: new Date().toISOString(),
       };
       session.turns.push(turn);

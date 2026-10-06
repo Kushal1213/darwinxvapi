@@ -26,6 +26,7 @@ deployment boundaries, and a closed improvement loop—not generic RAG alone.
 | ID | Use case | Primary actor | Current foundation | Priority | Recommendation |
 | --- | --- | --- | --- | --- | --- |
 | UC-01 | Grounded policy assistance | Operator | Implemented: scoped retrieval, citations, abstention, voice/text sessions | P0 hardening | Pilot after customer corpus and live-provider gates |
+| UC-01A | Live guidance console | Operator | First slice implemented: private search, editable/copyable cited reply, controlled delivery, and audit evidence | P0 enhancement | Run browser evaluation, then add versioned playbooks and measurement |
 | UC-02 | Delivered human handoff | Operator and supervisor | Durable internal delivery, acknowledgement, resolution, and audit events implemented | P0 hardening | Select and validate one external connector before claiming transfer |
 | UC-03 | Knowledge-gap inbox | Knowledge owner | Deterministic grouping, counts, states, revision-gated resolution, UI, and audit events implemented | P1 hardening | Add regression-case execution and retention policy |
 | UC-04 | Evidence-linked after-call summary | Operator and reviewer | Current summary is only the last four turns | P1 | Build as a draft requiring review |
@@ -39,6 +40,43 @@ deployment boundaries, and a closed improvement loop—not generic RAG alone.
 Priorities describe sequencing, not production readiness. UC-01 is the pilot product.
 UC-02 proves delivery only to the authenticated internal workspace inbox; it does not
 claim a phone transfer or delivery to an external customer system.
+
+## UC-01A: Live Guidance Console
+
+### User outcome
+
+During a live call, an operator can privately search approved knowledge, inspect
+the evidence, edit the proposed wording, and explicitly speak or add the reply.
+The private question never becomes a customer turn. Veyra retains the generated
+wording, delivered wording, evidence, operator, and timestamps for review.
+
+### First implementation slice
+
+- Add an authenticated call-scoped private guidance endpoint using the call's
+  fixed market, product, and language scope.
+- Do not feed private questions to the customer transcript, conversation-state
+  extractor, live signal detector, or knowledge-gap counts.
+- Reuse the one-active-knowledge-tip slot so a new private result replaces an
+  unselected stale result without evicting compliance or escalation alerts.
+- Add an editable response composer with copy and explicit voice/text delivery.
+- Keep the original suggestion immutable and record delivered wording, edit flag,
+  source evidence, and authenticated operator attribution.
+- Preserve apply idempotency and prevent automated guidance during an active
+  human handoff, after expiry, or after call completion.
+
+### Follow-up slices
+
+1. Versioned intent playbooks and customer-approved next steps.
+2. Guidance effectiveness analytics and reason-coded rejection.
+3. Sentence-level evidence warnings for operator edits.
+4. Evidence-linked summaries and manual QA/coaching.
+5. Customer-owned disclosure checklist in shadow mode.
+6. Supervisor whisper, then one selected CRM and handoff integration.
+
+Acceptance: private questions never appear in the archived transcript; an edited
+reply is delivered exactly once; replay cannot replace delivered wording; every
+delivery retains original text and citations; unsupported private searches abstain;
+permissions, restart, handoff, expiry, and interruption races are covered.
 
 ## UC-02: Delivered Human Handoff
 

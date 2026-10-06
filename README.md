@@ -147,6 +147,11 @@ during a voice call; in text mode it appears in the conversation. A newer produc
 question replaces an unselected older tip without displacing compliance or escalation
 alerts.
 
+During an open session, **Ask Veyra privately** lets an operator search approved
+knowledge without adding the question to the customer transcript. The resulting cited
+reply can be reviewed, edited, copied, and explicitly spoken or added to text chat.
+Veyra preserves the generated and delivered wording with operator attribution.
+
 ## Call Review
 
 End a voice call or select **End Session** after a text conversation, then open

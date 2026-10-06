@@ -5,7 +5,7 @@ import {
   PageHeading,
   StatusBadge,
 } from '../components/WorkspaceUI';
-import { Mic, PhoneOff, Phone, Send, CheckCircle2, Globe } from 'lucide-react';
+import { Mic, PhoneOff, Phone, Search, Send, CheckCircle2, Globe } from 'lucide-react';
 import { io as socketIO } from 'socket.io-client';
 import { useWorkspaceAuth } from '../components/WorkspaceAuth';
 import NudgeFeed from '../components/NudgeFeed';
@@ -108,6 +108,10 @@ export default function VoiceStudioPage() {
   const [useTextMode, setUseTextMode] = useState(false);
   const [isListening, setIsListening] = useState(false); // mic capturing
   const [guidedMode, setGuidedMode] = useState(true);
+  const [guidanceQuestion, setGuidanceQuestion] = useState('');
+  const [guidanceBusy, setGuidanceBusy] = useState(false);
+  const [guidanceMessage, setGuidanceMessage] = useState('');
+  const [guidanceError, setGuidanceError] = useState('');
 
   const recognitionRef = useRef(null);
   const audioCtxRef = useRef(null);
@@ -686,6 +690,9 @@ export default function VoiceStudioPage() {
         sessionIdRef.current = null;
         sessionStorage.removeItem(activeCallKey);
         setHasSession(false);
+        setGuidanceQuestion('');
+        setGuidanceMessage('');
+        setGuidanceError('');
       }
       setError(null);
     } catch (err) {
@@ -782,8 +789,40 @@ export default function VoiceStudioPage() {
     [ensureSession, guidedMode, inputText, isTextProcessing, market]
   );
 
+  const requestPrivateGuidance = useCallback(async (event) => {
+    event.preventDefault();
+    const query = guidanceQuestion.trim();
+    const callId = sessionIdRef.current;
+    if (!query || !callId || guidanceBusy) return;
+    setGuidanceBusy(true);
+    setGuidanceError('');
+    setGuidanceMessage('');
+    try {
+      const response = await fetch(
+        `/api/voice/session/${encodeURIComponent(callId)}/guidance/query`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query }),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Private guidance is unavailable.');
+      if (!data.suggestion) {
+        setGuidanceMessage(data.message || 'No approved knowledge supports that question.');
+        return;
+      }
+      setGuidanceQuestion('');
+      setGuidanceMessage('A private grounded reply is ready below.');
+    } catch (requestError) {
+      setGuidanceError(requestError.message);
+    } finally {
+      setGuidanceBusy(false);
+    }
+  }, [guidanceBusy, guidanceQuestion]);
+
   const applyGuidedNudge = useCallback(
-    async (nudge) => {
+    async (nudge, responseText) => {
       const callId = sessionIdRef.current;
       if (!callId) throw new Error('Start a session before using a guided reply.');
       if (isProcessingRef.current && !isSpeakingRef.current) {
@@ -803,7 +842,11 @@ export default function VoiceStudioPage() {
       try {
         const response = await fetch(
           `/api/voice/session/${encodeURIComponent(callId)}/nudges/${encodeURIComponent(nudge.id)}/apply`,
-          { method: 'POST' }
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ response_text: responseText }),
+          }
         );
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Could not apply this guided reply.');
@@ -1061,10 +1104,43 @@ export default function VoiceStudioPage() {
           </div>
           {hasSession && (
             <div className="border-t mt-5 pt-5">
+              <form onSubmit={requestPrivateGuidance} className="signal-tile !p-3 mb-5 space-y-3">
+                <div>
+                  <h2 className="text-xs font-semibold flex items-center gap-2">
+                    <Search size={14} className="text-accent" /> Ask Veyra privately
+                  </h2>
+                  <p id="private-guidance-help" className="text-[10px] text-muted mt-1 leading-5">
+                    Search approved knowledge without adding this question to the customer transcript.
+                  </p>
+                </div>
+                <label className="block text-xs text-muted">
+                  Operator question
+                  <textarea
+                    value={guidanceQuestion}
+                    maxLength={8000}
+                    rows={3}
+                    disabled={guidanceBusy || callState === 'ending'}
+                    aria-describedby="private-guidance-help"
+                    placeholder="For example: What should I say about prepayment charges?"
+                    onChange={(event) => setGuidanceQuestion(event.target.value)}
+                    className="field mt-2 resize-y"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={guidanceBusy || !guidanceQuestion.trim() || callState === 'ending'}
+                  className="btn w-full"
+                >
+                  <Search size={15} /> {guidanceBusy ? 'Searching…' : 'Find grounded reply'}
+                </button>
+                {guidanceMessage && <p role="status" className="text-xs text-muted">{guidanceMessage}</p>}
+                {guidanceError && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{guidanceError}</p>}
+              </form>
               <NudgeFeed
                 callId={sessionIdRef.current}
                 title="Live guidance"
                 onApply={applyGuidedNudge}
+                applyLabel={useTextMode ? 'Add reply' : 'Speak now'}
               />
             </div>
           )}

@@ -176,13 +176,42 @@ test('voice sessions, handoff, archive and restart', { timeout: 30000 }, async (
     const events = await api(`/../nudges/${suggestion.data.suggestion.id}/events`);
     assert.deepEqual(events.data.events.map((event) => event.action), ['created', 'applied']);
     assert.ok(events.data.events[1].actor_id);
+    const beforePrivateTurns = (await api('/session/guided-call')).data.turns.length;
+    const privateSuggestion = await api('/session/guided-call/guidance/query', { query: 'What should I say about prepayment?' });
+    assert.equal(privateSuggestion.status, 200);
+    assert.equal(privateSuggestion.data.response_kind, 'guided_suggestion');
+    assert.equal(privateSuggestion.data.suggestion.origin, 'operator_query');
+    assert.ok(privateSuggestion.data.suggestion.requested_by);
+    assert.equal((await api('/session/guided-call')).data.turns.length, beforePrivateTurns);
+    const edited = await api(`/session/guided-call/nudges/${privateSuggestion.data.suggestion.id}/apply`, {
+      response_text: 'Here is the reviewed prepayment information from our approved policy.',
+    });
+    assert.equal(edited.status, 200);
+    assert.equal(edited.data.answer, 'Here is the reviewed prepayment information from our approved policy.');
+    assert.equal(edited.data.nudge.suggested_response, 'Policy answer');
+    assert.equal(edited.data.nudge.was_edited, true);
+    assert.equal(edited.data.turn.guided_was_edited, true);
+    assert.equal(edited.data.turn.guided_original_response, 'Policy answer');
+    const editedReplay = await api(`/session/guided-call/nudges/${privateSuggestion.data.suggestion.id}/apply`, {
+      response_text: 'This must not replace the first delivered wording.',
+    });
+    assert.equal(editedReplay.data.answer, edited.data.answer);
+    assert.equal(editedReplay.data.replayed, true);
+    assert.equal((await api('/session/guided-call/guidance/query', { query: '' })).status, 400);
+    const turnsBeforePrivateAbstention = (await api('/session/guided-call')).data.turns.length;
+    const privateAbstention = await api('/session/guided-call/guidance/query', { query: 'unknown' });
+    assert.equal(privateAbstention.data.response_kind, 'guidance_abstention');
+    assert.equal(privateAbstention.data.suggestion, null);
+    assert.equal((await api('/session/guided-call')).data.turns.length, turnsBeforePrivateAbstention);
     const nextSuggestion = await api('/query', { call_id: 'guided-call', query: 'loan amount', guided_mode: true });
     assert.equal(nextSuggestion.data.response_kind, 'guided_suggestion');
     assert.notEqual(nextSuggestion.data.suggestion.id, suggestion.data.suggestion.id);
     assert.equal(nextSuggestion.data.suggestion.status, 'created');
+    assert.equal((await api(`/session/guided-call/nudges/${nextSuggestion.data.suggestion.id}/apply`, { response_text: ' ' })).status, 400);
     const handoff = await api('/query', { call_id: 'guided-call', query: 'I need a human', guided_mode: true });
     assert.equal(handoff.data.session.status, 'escalated');
     assert.equal((await api(`/session/guided-call/nudges/${nextSuggestion.data.suggestion.id}/apply`, {})).status, 409);
+    assert.equal((await api('/session/guided-call/guidance/query', { query: 'Can the bot continue?' })).status, 409);
     await api('/session/guided-call/end', {});
   });
 
