@@ -33,6 +33,7 @@ import {
 } from '../components/AnalyticsShared';
 
 import { LoadingState, PageHeading } from '../components/WorkspaceUI';
+import GuidanceAnalyticsPanel from '../components/GuidanceAnalyticsPanel';
 const number = new Intl.NumberFormat();
 const selectClass = 'field';
 const shortDate = (value) =>
@@ -636,6 +637,7 @@ export default function AnalyticsPage() {
               </p>
             </section>
           </div>
+          <GuidanceAnalyticsPanel guidance={currentData.guidance} />
         </div>
       ) : null}
     </div>

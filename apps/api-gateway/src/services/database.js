@@ -27,6 +27,89 @@ export function getDatabase() {
       status TEXT NOT NULL, ended_at TEXT, payload TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS calls_history ON calls(workspace_id, status, ended_at DESC);
+    CREATE TABLE IF NOT EXISTS call_summaries (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL REFERENCES workspace(id),
+      call_id TEXT NOT NULL REFERENCES calls(id),
+      version INTEGER NOT NULL,
+      state TEXT NOT NULL,
+      generator TEXT NOT NULL,
+      input_hash TEXT NOT NULL,
+      created_by TEXT REFERENCES users(id),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      UNIQUE(call_id, version)
+    );
+    CREATE INDEX IF NOT EXISTS call_summaries_call
+      ON call_summaries(call_id, version DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS call_summaries_fallback_input
+      ON call_summaries(call_id, input_hash, generator)
+      WHERE generator = 'deterministic_fallback.v1';
+    CREATE TABLE IF NOT EXISTS call_summary_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      summary_id TEXT NOT NULL REFERENCES call_summaries(id),
+      actor_id TEXT REFERENCES users(id),
+      action TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      payload TEXT
+    );
+    CREATE INDEX IF NOT EXISTS call_summary_events_summary
+      ON call_summary_events(summary_id, id);
+    CREATE TABLE IF NOT EXISTS disclosure_checklists (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL REFERENCES workspace(id),
+      market TEXT NOT NULL,
+      channel TEXT NOT NULL,
+      workflow TEXT NOT NULL,
+      version TEXT NOT NULL,
+      status TEXT NOT NULL,
+      effective_from TEXT NOT NULL,
+      effective_to TEXT,
+      created_by TEXT NOT NULL REFERENCES users(id),
+      approved_by TEXT REFERENCES users(id),
+      created_at TEXT NOT NULL,
+      approved_at TEXT,
+      payload TEXT NOT NULL,
+      UNIQUE(workspace_id, market, channel, workflow, version)
+    );
+    CREATE INDEX IF NOT EXISTS disclosure_checklists_scope
+      ON disclosure_checklists(workspace_id, market, channel, workflow, status, effective_from);
+    CREATE TABLE IF NOT EXISTS disclosure_checklist_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      checklist_id TEXT NOT NULL REFERENCES disclosure_checklists(id),
+      actor_id TEXT NOT NULL REFERENCES users(id),
+      action TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      payload TEXT
+    );
+    CREATE INDEX IF NOT EXISTS disclosure_checklist_events_checklist
+      ON disclosure_checklist_events(checklist_id, id);
+    CREATE TABLE IF NOT EXISTS disclosure_confirmations (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL REFERENCES workspace(id),
+      checklist_id TEXT NOT NULL REFERENCES disclosure_checklists(id),
+      call_id TEXT NOT NULL REFERENCES calls(id),
+      item_id TEXT NOT NULL,
+      actor_id TEXT NOT NULL REFERENCES users(id),
+      decision TEXT NOT NULL,
+      note TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(checklist_id, call_id, item_id)
+    );
+    CREATE INDEX IF NOT EXISTS disclosure_confirmations_call
+      ON disclosure_confirmations(call_id, checklist_id);
+    CREATE TABLE IF NOT EXISTS disclosure_confirmation_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      confirmation_id TEXT NOT NULL REFERENCES disclosure_confirmations(id),
+      actor_id TEXT NOT NULL REFERENCES users(id),
+      action TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      payload TEXT
+    );
+    CREATE INDEX IF NOT EXISTS disclosure_confirmation_events_confirmation
+      ON disclosure_confirmation_events(confirmation_id, id);
     CREATE TABLE IF NOT EXISTS nudges (
       id TEXT PRIMARY KEY, call_id TEXT NOT NULL REFERENCES calls(id),
       status TEXT NOT NULL, expires_at TEXT NOT NULL, payload TEXT NOT NULL
@@ -34,7 +117,8 @@ export function getDatabase() {
     CREATE INDEX IF NOT EXISTS nudges_call ON nudges(call_id, expires_at DESC);
     CREATE TABLE IF NOT EXISTS nudge_events (
       id INTEGER PRIMARY KEY, nudge_id TEXT NOT NULL REFERENCES nudges(id),
-      actor_id TEXT REFERENCES users(id), action TEXT NOT NULL, created_at TEXT NOT NULL
+      actor_id TEXT REFERENCES users(id), action TEXT NOT NULL, created_at TEXT NOT NULL,
+      payload TEXT
     );
     CREATE TABLE IF NOT EXISTS handoff_deliveries (
       id TEXT PRIMARY KEY,
@@ -121,8 +205,12 @@ export function getDatabase() {
       id INTEGER PRIMARY KEY, actor_id TEXT NOT NULL REFERENCES users(id),
       action TEXT NOT NULL, target_id TEXT NOT NULL, created_at INTEGER NOT NULL
     );
-    PRAGMA user_version = 7;
   `);
+  const nudgeEventColumns = db.prepare('PRAGMA table_info(nudge_events)').all();
+  if (!nudgeEventColumns.some((column) => column.name === 'payload')) {
+    db.exec('ALTER TABLE nudge_events ADD COLUMN payload TEXT');
+  }
+  db.exec('PRAGMA user_version = 10');
   database = db;
   return db;
 }

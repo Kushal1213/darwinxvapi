@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -7,6 +7,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import NudgeFeed from '../components/NudgeFeed';
+import CallSummaryReview from '../components/CallSummaryReview';
 import { MARKET_LABELS } from '../components/AnalyticsShared';
 import {
   EmptyState,
@@ -33,6 +34,18 @@ export default function CallHistoryPage({ selectedId = null, onSelectCall }) {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const navigateToEvidence = useCallback((turnIndex, sourceIndex) => {
+    const source = Number.isInteger(sourceIndex)
+      ? document.getElementById(`call-source-${turnIndex}-${sourceIndex}`)
+      : null;
+    if (source) source.open = true;
+    const target = source || document.getElementById(`call-turn-${turnIndex}`);
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const focusTarget = source?.querySelector('summary') || target;
+    focusTarget.focus({ preventScroll: true });
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -228,6 +241,11 @@ export default function CallHistoryPage({ selectedId = null, onSelectCall }) {
               )}
             </div>
           ))}
+          <CallSummaryReview
+            key={session.call_id}
+            callId={session.call_id}
+            onNavigateEvidence={navigateToEvidence}
+          />
           <div className="grid xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,1fr)] gap-5 items-start">
             <section className="panel" aria-label="Saved transcript">
               <div className="panel-header">
@@ -243,7 +261,12 @@ export default function CallHistoryPage({ selectedId = null, onSelectCall }) {
               )}
               <div className="space-y-7">
                 {session.turns.map((turn, index) => (
-                  <article key={index} className="min-w-0">
+                  <article
+                    key={index}
+                    id={`call-turn-${index}`}
+                    tabIndex={-1}
+                    className="min-w-0 focus:outline-2 focus:outline-offset-4 focus:outline-[var(--accent)]"
+                  >
                     <div className="message-meta justify-between">
                       <strong>
                         {turn.role === 'user' ? 'Customer' : 'Agent'}
@@ -254,8 +277,12 @@ export default function CallHistoryPage({ selectedId = null, onSelectCall }) {
                       {turn.content}
                     </p>
                     {turn.sources?.map((source, sourceIndex) => (
-                      <details key={sourceIndex} className="source-detail">
-                        <summary>
+                      <details
+                        key={sourceIndex}
+                        id={`call-source-${index}-${sourceIndex}`}
+                        className="source-detail"
+                      >
+                        <summary tabIndex={-1}>
                           {source.title || source.source || 'Knowledge source'}
                           {source.revision
                             ? ` · Revision ${source.revision}`

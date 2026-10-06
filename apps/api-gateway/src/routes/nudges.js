@@ -13,7 +13,7 @@ router.get('/', (req, res) => {
 router.post('/:id/actions', (req, res) => {
   const parsed = nudgeActionSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Invalid nudge action' });
-  const nudge = getNudgeStore().act(req.params.id, parsed.data.action, req.session.userId);
+  const nudge = getNudgeStore().act(req.params.id, parsed.data.action, req.session.userId, { reason: parsed.data.reason });
   io.emit('nudge:updated', { nudge });
   res.json({ nudge });
 });

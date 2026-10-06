@@ -3,10 +3,12 @@ import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
 import { io, logger } from '../index.js';
 import { createCallHistory } from '../services/call-history.js';
+import { getCallSummaryStore } from '../services/call-summaries.js';
 import { getNudgeStore } from '../services/nudges.js';
 import { persistHandoffEscalation } from '../services/handoff-deliveries.js';
 import { recordKnowledgeGap } from '../services/knowledge-gaps.js';
 import { evaluatePlaybook } from '../services/playbooks.js';
+import { createDisclosureChecklistStore } from '../services/disclosure-checklists.js';
 
 const router = express.Router();
 
@@ -35,6 +37,11 @@ function finishSession(callId) {
     outcome: activeEscalation(session) ? 'human_handoff_requested' : 'completed',
   };
   callHistory().save(finished);
+  try {
+    getCallSummaryStore().ensureDraft(finished);
+  } catch (error) {
+    logger.warn({ call_id: callId, err: error.message }, 'After-call summary generation failed');
+  }
   session.status = finished.status;
   conversations.delete(callId);
   io.emit('call:ended', { call_id: callId, session: finished, summary: finished.summary });
@@ -347,6 +354,7 @@ async function processVoiceTurn({ callId, query, market, language, recordUser = 
       suggested_response: answer,
       context_query: query,
       sources,
+      latency_ms: totalMs,
       expires_after_seconds: 180,
     });
     session.state.confidence = null;
@@ -576,15 +584,16 @@ router.post('/query', async (req, res) => {
  * Create a named call session
  */
 router.post('/session', (req, res) => {
-  const { call_id, language = 'en', market = 'india-loan' } = req.body;
+  const { call_id, language = 'en', market = 'india-loan', channel = 'voice' } = req.body;
   const id = call_id === undefined ? uuidv4() : call_id;
   if (typeof id !== 'string' || !id.trim() || id.length > 200) return res.status(400).json({ error: 'Invalid call_id' });
+  if (!['voice', 'text'].includes(channel)) return res.status(400).json({ error: 'Invalid channel' });
   try {
     scopeForMarket(market);
   } catch (err) {
     return res.status(err.status || 400).json({ error: err.message });
   }
-  const session = getOrCreateSession(id, { language, market });
+  const session = getOrCreateSession(id, { language, market, channel });
   emitLiveCallUpdate(session);
   logger.info({ call_id: id }, 'Session created');
   res.json({ call_id: id, session });
@@ -613,6 +622,39 @@ router.get('/session/:id/playbook', (req, res) => {
     reason: playbook ? null : 'No versioned playbook is available for this market.',
     evaluated_at: new Date().toISOString(),
   });
+});
+
+/**
+ * GET /api/voice/session/:id/disclosure-checklist
+ * Return conservative shadow-mode observations from the approved checklist that
+ * was effective when this call began. Absence of a checklist is explicit.
+ */
+router.get('/session/:id/disclosure-checklist', (req, res) => {
+  const session = conversations.get(req.params.id) || callHistory().get(req.params.id);
+  if (!session) return res.status(404).json({ error: 'Session not found' });
+  const checklist = createDisclosureChecklistStore().evaluate(session);
+  return res.json({
+    call_id: session.call_id,
+    checklist,
+    reason: checklist ? null : 'No approved, effective checklist applies to this market and channel.',
+    evaluated_at: new Date().toISOString(),
+  });
+});
+
+/**
+ * POST /api/voice/session/:id/disclosure-checklist/items/:itemId/confirm
+ * Record an attributed human decision without rewriting detector evidence.
+ */
+router.post('/session/:id/disclosure-checklist/items/:itemId/confirm', (req, res) => {
+  const session = conversations.get(req.params.id);
+  if (!session || !isLive(session)) return res.status(404).json({ error: 'Active session not found' });
+  const checklist = createDisclosureChecklistStore().confirm(
+    session,
+    req.params.itemId,
+    req.session.userId,
+    req.body,
+  );
+  return res.json({ call_id: session.call_id, checklist });
 });
 
 /**
@@ -691,6 +733,7 @@ router.post('/session/:id/guidance/query', async (req, res) => {
       sources,
       origin: 'operator_query',
       requested_by: req.session.userId,
+      latency_ms: latencyMs,
       expires_after_seconds: 180,
     });
     session.state.current_stage = 'awaiting_guidance';
@@ -777,6 +820,48 @@ router.get('/history', (req, res) => {
     return res.status(400).json({ error: 'limit must be 1-100 and offset must be a nonnegative integer' });
   }
   res.json(callHistory().list({ limit, offset }));
+});
+
+/**
+ * GET /api/voice/history/:id/summary
+ * Return the latest structured summary and every immutable prior version. A
+ * deterministic draft is created lazily for calls archived by older releases.
+ */
+router.get('/history/:id/summary', (req, res) => {
+  const session = callHistory().get(req.params.id);
+  if (!session) return res.status(404).json({ error: 'Call not found' });
+  if (session.status !== 'completed') return res.status(409).json({ error: 'The call is still active' });
+  getCallSummaryStore().ensureDraft(session);
+  return res.json(getCallSummaryStore().getForCall(session.call_id));
+});
+
+/**
+ * POST /api/voice/history/:id/summary/:summaryId/revise
+ * Create a new operator-authored draft without mutating its source version.
+ */
+router.post('/history/:id/summary/:summaryId/revise', (req, res) => {
+  const session = callHistory().get(req.params.id);
+  if (!session) return res.status(404).json({ error: 'Call not found' });
+  if (session.status !== 'completed') return res.status(409).json({ error: 'The call is still active' });
+  const summary = getCallSummaryStore().revise(
+    session,
+    req.params.summaryId,
+    req.session.userId,
+    req.body,
+  );
+  return res.status(201).json({ summary });
+});
+
+/**
+ * POST /api/voice/history/:id/summary/:summaryId/accept
+ * Accept only the latest draft. Replays are idempotent and accepted versions
+ * cannot be replaced by a delayed generation callback.
+ */
+router.post('/history/:id/summary/:summaryId/accept', (req, res) => {
+  const session = callHistory().get(req.params.id);
+  if (!session) return res.status(404).json({ error: 'Call not found' });
+  const summary = getCallSummaryStore().accept(session.call_id, req.params.summaryId, req.session.userId);
+  return res.json({ summary });
 });
 
 /**
@@ -874,6 +959,7 @@ function createSession(call_id, overrides = {}) {
     created_at: new Date().toISOString(),
     language: overrides.language || 'en',
     market: overrides.market || 'india-loan',
+    channel: overrides.channel || 'voice',
     turns: [],
     escalations: [],
     state: {

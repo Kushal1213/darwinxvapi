@@ -18,7 +18,7 @@ export function initSocketHandlers(io) {
     socket.on('nudge:dismiss', (data, callback) => {
       try {
         if (typeof data?.nudge_id !== 'string') throw new Error('Invalid nudge ID');
-        const nudge = getNudgeStore().act(data.nudge_id, 'dismissed', socket.request.session.userId);
+        const nudge = getNudgeStore().act(data.nudge_id, 'dismissed', socket.request.session.userId, { reason: data.reason });
         io.emit('nudge:updated', { nudge });
         if (typeof callback === 'function') callback({ nudge });
       } catch (error) {

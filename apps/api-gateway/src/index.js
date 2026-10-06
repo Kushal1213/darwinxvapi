@@ -24,6 +24,7 @@ import knowledgeRoutes, { startKnowledgeWorker } from './routes/knowledge.js';
 import analyticsRoutes from './routes/analytics.js';
 import handoffRoutes from './routes/handoffs.js';
 import knowledgeGapRoutes from './routes/knowledge-gaps.js';
+import disclosureChecklistRoutes from './routes/disclosure-checklists.js';
 import { createAuthentication } from './services/auth.js';
 
 // Socket handler
@@ -70,6 +71,8 @@ app.use('/api', auth.requireAuth);
 app.use('/api/team', auth.teamRouter);
 app.use('/api/knowledge', (req, res, next) => ['GET', 'HEAD', 'OPTIONS'].includes(req.method) ? next() : auth.requireAdmin(req, res, next));
 app.use('/api/knowledge/gaps', knowledgeGapRoutes);
+app.use('/api/disclosure-checklists', (req, res, next) => ['GET', 'HEAD', 'OPTIONS'].includes(req.method) ? next() : auth.requireAdmin(req, res, next));
+app.use('/api/disclosure-checklists', disclosureChecklistRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/rag', ragRoutes);

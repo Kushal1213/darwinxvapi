@@ -44,6 +44,12 @@ changing the call. Applying records the immutable generated wording, final deliv
 wording, edit flag, authenticated operator, citations, and exactly one assistant turn.
 An idempotent replay returns that first delivered turn and cannot replace its wording.
 
+Dismissing a grounded guidance tip requires one reason code: `not_relevant`,
+`incorrect_or_unsupported`, `too_verbose`, `already_answered`, `prefer_human`, or
+`other`. The selected reason is stored on the nudge and in the immutable event payload.
+Safety-alert dismissal does not require a reason. Reason capture measures workflow
+friction; it is not a model-quality label unless separately reviewed.
+
 ## Queue Rules
 
 - The gateway assigns a UUID and records call ID, signal type, text, priority,
@@ -67,7 +73,7 @@ An idempotent replay returns that first delivered turn and cannot replace its wo
 | Endpoint | Behavior |
 |---|---|
 | `GET /api/nudges?call_id=<id>` | Latest 100 nudges for a call; omit call ID for workspace-wide recent records |
-| `POST /api/nudges/:id/actions` | Body `{ "action": "acknowledged" }`, or another lifecycle/feedback action |
+| `POST /api/nudges/:id/actions` | Lifecycle or feedback action; grounded-tip dismissal also requires `reason` |
 | `GET /api/nudges/:id/events` | Ordered lifecycle and feedback history with actor and timestamp |
 | `POST /api/voice/session/:callId/nudges/:id/apply` | Apply one active grounded guidance tip |
 | `POST /api/voice/session/:callId/guidance/query` | Run a private operator knowledge search without creating a customer turn |
@@ -94,7 +100,8 @@ attributed socket dismissal, restart persistence, and API authentication.
 Browser checks cover acknowledgement, usefulness feedback, refresh recovery,
 and desktop/mobile rendering using an isolated workspace.
 
-The view is limited to the latest 100 records; exports and older-history pagination
-are future work. Feedback analytics, configurable rules, retention/deletion, and
+The view is limited to the latest 100 records; older-history pagination is future
+work. Guidance interaction analytics and aggregate CSV export are implemented but
+await final roadmap verification. Configurable rules, retention/deletion, and
 separate reviewer roles also remain pending. Existing single-workspace boundaries
 and dependency audit findings still apply.

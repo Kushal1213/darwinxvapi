@@ -28,11 +28,11 @@ Important changes from the previous plan:
 | --- | --- | --- |
 | Calls | Shared lifecycle, persistence, review, citations, and durable internal handoff delivery/acknowledgement/resolution | External connector delivery and live voice reliability |
 | Workspace | SQLite users/sessions, admin/operator permissions, invitations, disabling | Recovery, MFA/SSO, permission review, customer deployment |
-| Nudges | Persistence, expiry, duplicate suppression, feedback, audit events | Measured usefulness, signal-quality evaluation, production delivery behavior |
+| Nudges | Persistence, expiry, duplicate suppression, feedback, reason-coded guidance rejection, audit events, and interaction analytics | Signal-quality/correctness evaluation and production delivery behavior |
 | Knowledge | Immutable revisions, effective windows, approval/publication jobs, revision/page citations, and grouped knowledge-gap triage | Separate worker supervision, automatic gap regression, retention, and explicit legacy corpus review |
 | Tenant boundary | Independent local stacks and storage; cross-stack tests | Private production networks, container/VM boundaries, per-tenant operations |
 | Retrieval | FAISS plus lexical fallback; market/product hard filters; attributed evidence extraction and explicit abstention | Customer-reviewed isolation/support corpus and calibrated thresholds |
-| Analytics | Persisted workspace metrics, distinct sample counts, unavailable states, filters, and CSV export | No validated pilot ROI or live-provider performance baseline |
+| Analytics | Persisted workspace and guidance-interaction metrics, distinct sample counts, unavailable states, filters, and CSV export | No validated pilot ROI, correctness result, or live-provider performance baseline |
 | Providers | Maintained `google-genai` SDK adapter, pinned dependencies, and provider-free contract tests | Account/region availability, limits, terms, and authorized live smoke tests |
 | Verification | 38 gateway + 19 Python + 2 tenant tests, seven-case grounding gate, provider inventory test, and frontend production build passed on 2026-10-06 | Live-provider quality and customer-reviewed corpus remain unproven |
 
@@ -46,9 +46,9 @@ in this order, with each delivered response remaining human-controlled and cited
 | --- | --- | --- | --- |
 | 1 | Private Ask Veyra | Operator-only knowledge search that never enters the customer transcript; editable reply preview; copy or explicit delivery; original and delivered wording retained | Transcript isolation, edit attribution, replay, handoff, expiry, and browser interaction tests |
 | 2 | Intent-driven playbooks | First deterministic India-loan definition implemented with cited evidence and human-controlled actions; customer-owned configuration remains | Customer-approved playbook fixtures; immutable configuration versions; no autonomous external actions |
-| 3 | Guidance measurement | Display, selection, edit, dismissal, latency, source, and outcome metrics with denominators | Workspace dashboard and export; usefulness separated from correctness review |
-| 4 | Evidence-linked after-call work | Versioned summary drafts, structured follow-ups, and links to transcript turns and knowledge evidence | Retryable generation, human acceptance/edit audit, curated accuracy review |
-| 5 | Disclosure checklist shadow mode | Customer-owned, effective-dated checklist with observed/missing/uncertain evidence states | Legal/policy owner approval and reviewed false-positive/negative set before live warnings |
+| 3 | Guidance measurement | Implementation added for display, apply, edit, dismissal reasons, latency, source, feedback, and outcome context with denominators | Final automated/browser verification deferred to roadmap completion; usefulness remains separate from correctness review |
+| 4 | Evidence-linked after-call work | Provider-free versioned drafts, structured proposed follow-ups, transcript/citation navigation, immutable edits, and acceptance audit implemented | Provider retry path, final automated/browser verification, and curated accuracy review remain |
+| 5 | Disclosure checklist shadow mode | Immutable scoped versions, published-revision binding, second-admin approval, effective dates, observed/missing/uncertain suggestions, evidence navigation, and human confirmation implemented | Customer legal/policy-owner approval, dedicated role, final verification, and reviewed false-positive/negative set remain |
 | 6 | QA and coaching | Immutable manual rubrics, sampling, evidence-linked findings, and coaching history | Reviewer attribution, rubric versioning, disagreement and sample-size reporting |
 | 7 | Supervisor and system integrations | Private supervisor guidance, controlled takeover, one selected CRM context adapter, and one external handoff destination | Named customer systems, least-privilege access, idempotent callbacks, failure runbooks |
 | 8 | Evaluated language expansion | Code-switch and locale-specific guidance evaluated independently per market | Native-speaker review and market-specific held-out gates |
@@ -419,8 +419,7 @@ Still open: OCR for scanned PDFs, printed-label mapping when it differs from the
   text, abstention, handoff blocking, evidence retention, and queue capacity.
 
 Still open: browser interaction evaluation, edit-support warnings, customer-owned
-playbook configuration/approval, guidance analytics, reason-coded rejection, and
-delivery modes beyond speak/add/copy.
+playbook configuration/approval, and delivery modes beyond speak/add/copy.
 
 ### Intent-driven live playbook first slice — 2026-10-06
 
@@ -436,8 +435,58 @@ delivery modes beyond speak/add/copy.
   passes with the new panel.
 
 Still open: interactive browser evaluation, customer-authored definitions, independent
-approval, effective dates, manual confirmation/skip reasons, analytics, and additional
-market-specific playbooks.
+approval, effective dates, manual confirmation/skip reasons, reviewed effectiveness
+targets, and additional market-specific playbooks.
+
+### Guidance effectiveness measurement slice — 2026-10-06
+
+- Grounded guidance dismissals now require a reason while safety alerts preserve their
+  fast dismissal path. Reasons are stored in both the current nudge and event payload.
+- Guidance records capture display, apply, edit, dismissal, generation latency, and
+  decision timing needed for explicit-denominator operational metrics.
+- Analytics reports funnel counts/rates, origins, citation presence, feedback response,
+  useful percentage among ratings, latency samples, reason counts, and handoff context.
+- The Analytics UI and CSV expose aggregate measurements without transcripts, private
+  operator questions, response wording, or call IDs in the guidance export section.
+- Metrics are labelled as interaction evidence, never correctness, compliance, customer
+  satisfaction, causal impact, or ROI.
+
+Per the requested roadmap workflow, automated and browser verification for this slice
+is deferred until the remaining roadmap implementation is complete.
+
+### Evidence-linked after-call summary slice — 2026-10-06
+
+- Completed calls now receive a deterministic, versioned draft with customer intent,
+  stated facts, assistance, unresolved issues, handoff state, and next actions.
+- Generated facts point back to transcript turns; grounded assistance also retains
+  document revision, chunk, and PDF-page identity for citation navigation.
+- Call Review supports evidence jumps, structured proposed follow-ups, operator edits,
+  immutable prior versions, and idempotent acceptance of the latest draft.
+- Generation failure cannot block archival, and legacy completed calls receive a lazy
+  draft. The input hash makes fallback generation idempotent for one call snapshot.
+- The fallback is visibly labelled and does not claim correctness, completed follow-up,
+  or external provider generation.
+
+Still open: provider-backed asynchronous generation and retry, provider usage records,
+sentence-level support checks for edits, curated summary evaluation, and final automated
+and browser verification.
+
+### Disclosure checklist shadow-mode slice — 2026-10-06
+
+- Knowledge Hub now supports immutable checklist drafts scoped to market, channel,
+  workflow, version, and UTC effective period. No regulatory checklist is bundled.
+- Every item must reference an exact published knowledge revision. A different admin
+  must approve it, expired versions are rejected, and overlapping active periods fail.
+- Voice Studio labels detector output as advisory shadow-mode suggestions and exposes
+  observed, missing, uncertain, and not-applicable states without declaring compliance.
+- Evidence links navigate to transcript turns and citations. Human decisions are
+  attributed and append-only; missing and not-applicable decisions require notes.
+- Retiring a version requires a reason. New calls cannot select expired or retired
+  versions, and absence of an approved checklist remains visible rather than passing.
+
+Still open: customer policy/legal sign-off, a dedicated compliance-owner role, semantic
+and multilingual evaluation, disagreement analytics, reviewed false-positive/negative
+fixtures, and final automated and browser verification.
 
 ## Definition of Product Progress
 

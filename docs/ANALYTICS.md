@@ -14,11 +14,13 @@ comes from the authenticated account, never a request parameter. Responses are
 marked `Cache-Control: no-store`.
 
 Add `format=csv` to download daily aggregate rows with columns
-`date,calls,completed,handoffs`. CSV does not contain transcripts, names, or call
-IDs. Explicit `format=json` returns the normal JSON response.
+`date,calls,completed,handoffs`, followed by a separate two-column guidance summary
+when guidance data is present. CSV does not contain transcripts, names, private
+questions, suggested wording, or call IDs. Explicit `format=json` returns the normal
+JSON response.
 
 The response contains `generated_at`, `filters`, `window`, `totals`, `daily`,
-`markets`, and at most five `recent_calls`. Recent calls expose only IDs, market,
+`markets`, `guidance`, and at most five `recent_calls`. Recent calls expose only IDs, market,
 status, start/end timestamps, outcome, and turn count; they exclude transcript,
 source excerpts, state, and handoff reasons.
 
@@ -56,6 +58,30 @@ source excerpts, state, and handoff reasons.
   calls. Market buckets include observed markets only; missing legacy markets
   appear as `unknown` under the all-markets filter.
 
+### Guidance effectiveness
+
+The guidance cohort contains `knowledge_tip` records created inside the selected UTC
+window and market. It is independent of the call-start cohort, so a tip is attributed
+to when the guidance was generated. The response reports:
+
+- generated, displayed, active, applied, edited, dismissed, and expired counts;
+- apply, edit, dismissal, display, citation-presence, and feedback-response rates with
+  explicit denominators;
+- customer-turn versus private-operator-search origin counts;
+- average recorded retrieval-to-suggestion latency and sample count;
+- average time from suggestion creation to apply/dismiss and sample count;
+- reason-coded dismissals, feedback volume, and useful percentage among ratings; and
+- distinct calls with guidance and how many later recorded a handoff outcome.
+
+Only grounded guidance requires a dismissal reason: `not_relevant`,
+`incorrect_or_unsupported`, `too_verbose`, `already_answered`, `prefer_human`, or
+`other`. Legacy dismissals remain visible as `unclassified`. Safety-alert dismissal
+stays one click so reason capture does not delay urgent handling.
+
+These measures describe operator interaction, not correctness, customer satisfaction,
+compliance, causal impact, or ROI. “Useful” is an operator rating with its own response
+denominator. Citation coverage measures source presence only.
+
 ## Boundaries and verification
 
 The endpoint aggregates locally persisted snapshots at request time. It does not
@@ -64,7 +90,9 @@ JSON archives become available after the voice API's one-time SQLite import.
 The implementation reads workspace snapshots and is intended for the current
 local dedicated-stack volume; larger deployments need indexed event aggregates.
 It does not measure failures, ASR/TTS latency, retrieval correctness, or provider
-cost because those are not reliably recorded in the current call contract.
+cost because those are not reliably recorded in the current call contract. Guidance
+aggregation is computed from persisted records at request time and will require indexed
+event aggregates at larger production volumes.
 
 Run `node --test test/analytics.test.js` from `apps/api-gateway` for UTC boundary,
 denominator, percentile, missing-measurement, workspace isolation, authentication,

@@ -26,12 +26,12 @@ deployment boundaries, and a closed improvement loop—not generic RAG alone.
 | ID | Use case | Primary actor | Current foundation | Priority | Recommendation |
 | --- | --- | --- | --- | --- | --- |
 | UC-01 | Grounded policy assistance | Operator | Implemented: scoped retrieval, citations, abstention, voice/text sessions | P0 hardening | Pilot after customer corpus and live-provider gates |
-| UC-01A | Live guidance console | Operator | Private search/editable delivery plus first versioned India-loan playbook implemented | P0 enhancement | Run browser evaluation, then add guidance measurement and customer-owned playbook approval |
+| UC-01A | Live guidance console | Operator | Private search/editable delivery, first live playbook, and guidance measurement implemented; final verification deferred | P0 enhancement | Add customer-owned playbook approval and edit-support warnings |
 | UC-02 | Delivered human handoff | Operator and supervisor | Durable internal delivery, acknowledgement, resolution, and audit events implemented | P0 hardening | Select and validate one external connector before claiming transfer |
 | UC-03 | Knowledge-gap inbox | Knowledge owner | Deterministic grouping, counts, states, revision-gated resolution, UI, and audit events implemented | P1 hardening | Add regression-case execution and retention policy |
-| UC-04 | Evidence-linked after-call summary | Operator and reviewer | Current summary is only the last four turns | P1 | Build as a draft requiring review |
+| UC-04 | Evidence-linked after-call summary | Operator and reviewer | Provider-free versioned draft, evidence navigation, revision, and acceptance implemented | P1 hardening | Add provider retry and curated evaluation |
 | UC-05 | QA review and coaching | Supervisor/reviewer | Transcript, citations, nudges, and outcomes exist | P1 | Add manual rubric before AI scoring |
-| UC-06 | Customer-owned disclosure checklist | Operator and compliance reviewer | Versioned knowledge and citations exist | P1 guarded | Build only from an approved customer checklist |
+| UC-06 | Customer-owned disclosure checklist | Operator and compliance reviewer | Immutable scoped versions, published-source binding, second-admin approval, live shadow states, and human confirmation implemented | P1 guarded | Obtain customer/legal approval and reviewed false-positive/negative set |
 | UC-07 | Knowledge change impact review | Knowledge owner | Revision comparison, effective windows, publication jobs, and history exist | P1 | Add usage/impact preview and rollback selection |
 | UC-08 | Operations incident and kill switch | Admin/operator | Health views and isolated stacks exist | P0 release control | Build alongside production deployment work |
 | UC-09 | Additional language/market rollout | Product owner and native reviewer | Four demo agents exist | P2 | Repeat evaluation independently per market/language |
@@ -66,12 +66,11 @@ wording, delivered wording, evidence, operator, and timestamps for review.
 
 ### Follow-up slices
 
-1. Guidance effectiveness analytics and reason-coded rejection.
-2. Customer-owned playbook configuration, approval, and effective versions.
-3. Sentence-level evidence warnings for operator edits.
-4. Evidence-linked summaries and manual QA/coaching.
-5. Customer-owned disclosure checklist in shadow mode.
-6. Supervisor whisper, then one selected CRM and handoff integration.
+1. Customer-owned playbook configuration, approval, and effective versions.
+2. Sentence-level evidence warnings for operator edits.
+3. Evidence-linked summaries and manual QA/coaching.
+4. Customer-owned disclosure checklist in shadow mode.
+5. Supervisor whisper, then one selected CRM and handoff integration.
 
 Acceptance: private questions never appear in the archived transcript; an edited
 reply is delivered exactly once; replay cannot replace delivered wording; every
@@ -179,6 +178,12 @@ event/audit pattern.
 
 ## UC-04: Evidence-Linked After-Call Summary
 
+Implementation status: the provider-free slice is implemented. Completed calls now
+receive versioned deterministic drafts, evidence links, structured proposed follow-ups,
+operator revision/acceptance, and preserved audit history. Provider-backed asynchronous
+generation, retry UI, evaluation, and workflow execution remain open. Automated and
+browser verification is deferred to the final roadmap pass.
+
 ### User outcome
 
 An operator receives a draft summary containing customer intent, facts stated by the
@@ -198,6 +203,9 @@ claims retain the document revision, chunk, and PDF page that supported them.
   audit event; do not silently train on edits or send them to a provider.
 - Add deterministic fallback sections from persisted call state when no provider is
   configured. Label fallback and model-generated summaries distinctly.
+
+Current implementation details and boundaries are recorded in
+[CALL_SUMMARIES.md](CALL_SUMMARIES.md).
 
 ### Acceptance and measurement
 
@@ -233,6 +241,14 @@ a reviewer; changing a model cannot rewrite historical reviews; reviewer disagre
 and sample size remain visible. Estimated effort: eight to twelve engineering days.
 
 ## UC-06: Customer-Owned Disclosure Checklist
+
+Implementation status: the guarded infrastructure and UI are implemented without a
+bundled checklist. Administrators can create immutable scoped versions tied to published
+knowledge, a different administrator must approve them, effective periods cannot overlap,
+and Voice Studio shows conservative suggested states plus append-only human decisions.
+Customer/legal approval, a dedicated compliance-owner role, reviewed evaluation, and
+final automated/browser verification remain open. See
+[DISCLOSURE_CHECKLISTS.md](DISCLOSURE_CHECKLISTS.md).
 
 ### User outcome
 

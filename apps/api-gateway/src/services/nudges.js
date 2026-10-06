@@ -15,8 +15,17 @@ const inputSchema = z.object({
   latency_ms: z.number().min(0).optional().default(0),
   expires_after_seconds: z.number().min(1).max(300).optional().default(45),
 });
+export const GUIDANCE_DISMISS_REASONS = [
+  'not_relevant',
+  'incorrect_or_unsupported',
+  'too_verbose',
+  'already_answered',
+  'prefer_human',
+  'other',
+];
 export const nudgeActionSchema = z.object({
   action: z.enum(['displayed', 'acknowledged', 'dismissed', 'useful', 'not_useful', 'wrong_signal', 'too_late']),
+  reason: z.enum(GUIDANCE_DISMISS_REASONS).optional(),
 }).strict();
 const active = (nudge) => ['created', 'displayed'].includes(nudge.status);
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
@@ -27,11 +36,11 @@ export function createNudgeStore(db = getDatabase(), now = () => Date.now()) {
     const row = db.prepare('SELECT payload FROM nudges WHERE id=?').get(id);
     return row ? JSON.parse(row.payload) : null;
   };
-  function save(nudge, action, actor = null) {
+  function save(nudge, action, actor = null, eventPayload = null) {
     db.prepare('INSERT INTO nudges VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET status=excluded.status, payload=excluded.payload')
       .run(nudge.id, nudge.call_id, nudge.status, nudge.expires_at, JSON.stringify(nudge));
-    db.prepare('INSERT INTO nudge_events(nudge_id, actor_id, action, created_at) VALUES (?, ?, ?, ?)')
-      .run(nudge.id, actor, action, stamp());
+    db.prepare('INSERT INTO nudge_events(nudge_id, actor_id, action, created_at, payload) VALUES (?, ?, ?, ?, ?)')
+      .run(nudge.id, actor, action, stamp(), eventPayload ? JSON.stringify(eventPayload) : null);
   }
   function transaction(work) {
     db.exec('BEGIN IMMEDIATE');
@@ -112,6 +121,7 @@ export function createNudgeStore(db = getDatabase(), now = () => Date.now()) {
         status: 'applied',
         applied_response: appliedResponse,
         was_edited: appliedResponse !== nudge.suggested_response,
+        applied_at: stamp(),
         acted_by: actor,
         acted_at: stamp(),
         updated_at: stamp(),
@@ -122,24 +132,39 @@ export function createNudgeStore(db = getDatabase(), now = () => Date.now()) {
       });
       return { nudge: updated, applied: true };
     },
-    act(id, action, actor) {
-      if (!nudgeActionSchema.safeParse({ action }).success) fail(400, 'Invalid nudge action');
+    act(id, action, actor, options = {}) {
+      if (!nudgeActionSchema.safeParse({ action, reason: options.reason }).success) fail(400, 'Invalid nudge action');
       expire();
       const nudge = read(id);
       if (!nudge) fail(404, 'Nudge not found');
+      if (nudge.type === 'knowledge_tip' && action === 'dismissed' && !options.reason) {
+        fail(400, 'A dismissal reason is required for grounded guidance');
+      }
       const isFeedback = ['useful', 'not_useful', 'wrong_signal', 'too_late'].includes(action);
       if (isFeedback ? nudge.feedback === action : nudge.status === action) return nudge;
       if (!isFeedback && !active(nudge)) fail(409, 'This nudge is already resolved or expired');
-      const updated = { ...nudge, updated_at: stamp(), ...(isFeedback
+      const actionAt = stamp();
+      const lifecycleFields = action === 'displayed'
+        ? { displayed_at: nudge.displayed_at || actionAt }
+        : action === 'dismissed'
+          ? { dismissed_at: actionAt, dismiss_reason: options.reason || null }
+          : action === 'acknowledged'
+            ? { acknowledged_at: actionAt }
+            : {};
+      const updated = { ...nudge, updated_at: actionAt, ...lifecycleFields, ...(isFeedback
         ? { feedback: action, feedback_by: actor, feedback_at: stamp() }
         : { status: action, acted_by: actor, acted_at: stamp() }) };
-      transaction(() => save(updated, action, actor));
+      transaction(() => save(updated, action, actor, options.reason ? { reason: options.reason } : null));
       return updated;
     },
     events(id) {
       expire();
       if (!read(id)) fail(404, 'Nudge not found');
-      return db.prepare('SELECT actor_id, action, created_at FROM nudge_events WHERE nudge_id=? ORDER BY id').all(id);
+      return db.prepare('SELECT actor_id, action, created_at, payload FROM nudge_events WHERE nudge_id=? ORDER BY id').all(id)
+        .map((event) => ({
+          ...event,
+          payload: event.payload ? JSON.parse(event.payload) : null,
+        }));
     },
   };
 }

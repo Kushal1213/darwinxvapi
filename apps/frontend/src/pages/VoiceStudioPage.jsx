@@ -10,6 +10,7 @@ import { io as socketIO } from 'socket.io-client';
 import { useWorkspaceAuth } from '../components/WorkspaceAuth';
 import NudgeFeed from '../components/NudgeFeed';
 import LivePlaybook from '../components/LivePlaybook';
+import LiveDisclosureChecklist from '../components/LiveDisclosureChecklist';
 
 // ─── Market Profiles ──────────────────────────────────────────
 const MARKETS = {
@@ -39,10 +40,14 @@ function VoiceWave({ level, active }) {
     </div>
   );
 }
-function MessageBubble({ msg }) {
+function MessageBubble({ msg, turnIndex }) {
   const isUser = msg.role === 'user';
   return (
-    <article className={`message ${isUser ? 'message-customer' : ''}`}>
+    <article
+      id={Number.isInteger(turnIndex) ? `live-turn-${turnIndex}` : undefined}
+      tabIndex={Number.isInteger(turnIndex) ? -1 : undefined}
+      className={`message ${isUser ? 'message-customer' : ''} focus:outline-2 focus:outline-offset-4 focus:outline-[var(--accent)]`}
+    >
       <div className="message-meta">
         <span className="font-semibold">
           {isUser ? 'Customer' : msg.agentName || 'Veyra agent'}
@@ -60,8 +65,12 @@ function MessageBubble({ msg }) {
       <p className="message-content">{msg.content}</p>
       {!isUser &&
         msg.sources?.map((source, index) => (
-          <details key={source.chunk_id || index} className="source-detail">
-            <summary>
+          <details
+            key={source.chunk_id || index}
+            id={Number.isInteger(turnIndex) ? `live-source-${turnIndex}-${index}` : undefined}
+            className="source-detail"
+          >
+            <summary tabIndex={-1}>
               Source {index + 1} ·{' '}
               {source.title || source.source || 'Knowledge document'}
             </summary>
@@ -133,6 +142,17 @@ export default function VoiceStudioPage() {
 
   const current = MARKETS[market];
 
+  const navigateToChecklistEvidence = useCallback((turnIndex, sourceIndex) => {
+    const source = Number.isInteger(sourceIndex)
+      ? document.getElementById(`live-source-${turnIndex}-${sourceIndex}`)
+      : null;
+    if (source) source.open = true;
+    const target = source || document.getElementById(`live-turn-${turnIndex}`);
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    (source?.querySelector('summary') || target).focus({ preventScroll: true });
+  }, []);
+
   // Every browser turn uses the same server-owned call id. This keeps RAG
   // history, socket updates, nudges, and escalation summaries tied together.
   const ensureSession = useCallback(async () => {
@@ -143,6 +163,7 @@ export default function VoiceStudioPage() {
       body: JSON.stringify({
         market,
         language: MARKETS[market]?.lang || 'en-IN',
+        channel: useTextMode ? 'text' : 'voice',
       }),
     });
     if (!response.ok) {
@@ -157,7 +178,7 @@ export default function VoiceStudioPage() {
     setHasSession(true);
     socketRef.current?.emit('monitor:call', { call_id: data.call_id });
     return data.call_id;
-  }, [activeCallKey, market]);
+  }, [activeCallKey, market, useTextMode]);
 
   // ── Scroll to bottom on new messages ──
   useEffect(() => {
@@ -203,7 +224,7 @@ export default function VoiceStudioPage() {
         if (!mounted) return;
         sessionIdRef.current = callId;
         setMarket(session.market);
-        setUseTextMode(true);
+        setUseTextMode(session.channel !== 'voice');
         setMessages((session.turns || []).map((turn, index) => ({
           ...turn,
           id: `${callId}-${index}`,
@@ -1150,6 +1171,13 @@ export default function VoiceStudioPage() {
                   onPrepareGuidance={preparePrivateGuidance}
                 />
               </div>
+              <div className="mb-5">
+                <LiveDisclosureChecklist
+                  callId={sessionIdRef.current}
+                  turnCount={messages.length}
+                  onNavigateEvidence={navigateToChecklistEvidence}
+                />
+              </div>
               <NudgeFeed
                 callId={sessionIdRef.current}
                 title="Live guidance"
@@ -1207,8 +1235,8 @@ export default function VoiceStudioPage() {
                   : 'Start a voice call to see the live transcript, responses, and supporting knowledge in one place.'}
               </EmptyState>
             )}
-            {messages.map((msg) => (
-              <MessageBubble key={msg.id} msg={msg} />
+            {messages.map((msg, index) => (
+              <MessageBubble key={msg.id} msg={msg} turnIndex={index} />
             ))}
             {partialTranscript && (
               <MessageBubble

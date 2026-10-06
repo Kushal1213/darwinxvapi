@@ -6,6 +6,16 @@ import { EmptyState, LoadingState } from './WorkspaceUI';
 const isActive = (nudge) =>
   ['created', 'displayed'].includes(nudge.status) &&
   Date.parse(nudge.expires_at) > Date.now();
+const GUIDANCE_DISMISS_OPTIONS = [
+  ['not_relevant', 'Not relevant'],
+  ['incorrect_or_unsupported', 'Incorrect or unsupported'],
+  ['too_verbose', 'Too verbose'],
+  ['already_answered', 'Already answered'],
+  ['prefer_human', 'Prefer human assistance'],
+  ['other', 'Other'],
+];
+const guidanceDismissLabel = (value) =>
+  GUIDANCE_DISMISS_OPTIONS.find(([code]) => code === value)?.[1] || value;
 
 export default function NudgeFeed({ callId = null, review = false, onApply = null, applyLabel = 'Use this reply', title = 'Operator nudges' }) {
   const [nudges, setNudges] = useState([]);
@@ -67,7 +77,7 @@ export default function NudgeFeed({ callId = null, review = false, onApply = nul
     };
   }, [callId, revision]);
 
-  async function act(id, action) {
+  async function act(id, action, reason) {
     const current = generation.current;
     setBusy((previous) => ({ ...previous, [id]: true }));
     try {
@@ -76,7 +86,7 @@ export default function NudgeFeed({ callId = null, review = false, onApply = nul
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action }),
+          body: JSON.stringify({ action, ...(reason ? { reason } : {}) }),
         }
       );
       const data = await response.json();
@@ -191,6 +201,7 @@ function NudgeRow({ nudge, busy, onAction, onApply, applyLabel, showCall }) {
   const displayed = useRef(false);
   const [draft, setDraft] = useState(nudge.applied_response || nudge.suggested_response || '');
   const [copyStatus, setCopyStatus] = useState('');
+  const [dismissReason, setDismissReason] = useState('');
   useEffect(() => {
     if (nudge.status === 'created' && isActive(nudge) && !displayed.current) {
       displayed.current = true;
@@ -200,6 +211,7 @@ function NudgeRow({ nudge, busy, onAction, onApply, applyLabel, showCall }) {
   useEffect(() => {
     setDraft(nudge.applied_response || nudge.suggested_response || '');
     setCopyStatus('');
+    setDismissReason('');
   }, [nudge.id, nudge.applied_response, nudge.suggested_response]);
   const active = isActive(nudge);
   const edited = Boolean(nudge.suggested_response) && draft.trim() !== nudge.suggested_response.trim();
@@ -225,6 +237,9 @@ function NudgeRow({ nudge, busy, onAction, onApply, applyLabel, showCall }) {
         <p className="text-xs break-all text-muted">Call {nudge.call_id}</p>
       )}
       <p className="text-sm break-words">{nudge.text}</p>
+      {nudge.dismiss_reason ? (
+        <p className="text-xs text-muted">Dismissed because: {guidanceDismissLabel(nudge.dismiss_reason)}</p>
+      ) : null}
       {nudge.type === 'knowledge_tip' && nudge.suggested_response && (
         <div className="signal-tile space-y-2">
           <p className="text-xs font-semibold flex items-center gap-2">
@@ -317,15 +332,41 @@ function NudgeRow({ nudge, busy, onAction, onApply, applyLabel, showCall }) {
                 <Check size={18} />
               </button>
             ) : null}
-            <button
-              disabled={busy}
-              aria-label="Dismiss nudge"
-              title="Dismiss nudge"
-              onClick={() => onAction(nudge.id, 'dismissed')}
-              className="btn"
-            >
-              <X size={18} />
-            </button>
+            {nudge.type === 'knowledge_tip' ? (
+              <div className="basis-full flex flex-wrap items-end gap-2">
+                <label className="min-w-52 flex-1 text-xs text-muted">
+                  Reason to dismiss this reply
+                  <select
+                    value={dismissReason}
+                    disabled={busy}
+                    onChange={(event) => setDismissReason(event.target.value)}
+                    className="field mt-2"
+                  >
+                    <option value="">Select a reason</option>
+                    {GUIDANCE_DISMISS_OPTIONS.map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  disabled={busy || !dismissReason}
+                  onClick={() => onAction(nudge.id, 'dismissed', dismissReason)}
+                  className="btn"
+                >
+                  <X size={15} /> Dismiss reply
+                </button>
+              </div>
+            ) : (
+              <button
+                disabled={busy}
+                aria-label="Dismiss nudge"
+                title="Dismiss nudge"
+                onClick={() => onAction(nudge.id, 'dismissed')}
+                className="btn"
+              >
+                <X size={18} />
+              </button>
+            )}
           </>
         )}
         <label className="text-xs text-muted">

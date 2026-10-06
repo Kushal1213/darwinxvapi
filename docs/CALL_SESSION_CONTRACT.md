@@ -56,8 +56,13 @@ Browser mutations must carry an allowed Origin. See [workspace access](WORKSPACE
 | `POST /api/voice/session/:id/nudges/:nudgeId/apply` | Commit one reviewed tip as the next assistant turn |
 | `POST /api/voice/session/:id/guidance/query` | Search approved knowledge privately without creating a customer turn |
 | `GET /api/voice/session/:id/playbook` | Derive versioned live workflow progress from persisted call evidence |
+| `GET /api/voice/session/:id/disclosure-checklist` | Evaluate the approved checklist effective for the call in advisory shadow mode |
+| `POST /api/voice/session/:id/disclosure-checklist/items/:itemId/confirm` | Record an attributed human checklist decision for a live call |
 | `GET /api/voice/history?limit=20&offset=0` | Newest completed calls first; `calls` and `total` |
 | `GET /api/voice/session/:id` | Full live or archived session, including transcript and citations |
+| `GET /api/voice/history/:id/summary` | Latest evidence-linked summary plus immutable version history |
+| `POST /api/voice/history/:id/summary/:summaryId/revise` | Create a new operator-edited draft version |
+| `POST /api/voice/history/:id/summary/:summaryId/accept` | Accept the latest draft idempotently |
 | `GET /api/handoffs?state=open` | Durable internal inbox, ordered by priority and request time |
 | `GET /api/handoffs/:id` | Delivery context and append-only event history |
 | `POST /api/handoffs/:id/acknowledge` | Record recipient acknowledgement idempotently |
@@ -67,12 +72,16 @@ History accepts an integer limit from 1 to 100 and a nonnegative integer offset.
 List entries omit `turns` and include `turn_count`. Detail entries contain:
 
 - `call_id`, `market`, `language`, `created_at`, `last_activity`, `status`.
+- `channel` (`voice` or `text`) fixes channel-scoped checklist selection when the
+  session is created.
 - `turns`: role, content, timestamp (`ts`), and optional sources and latency.
 - `state`: captured intent and qualification fields, current stage and signals.
 - `escalations`: handoff ID, reason, intent, last customer message, recent
   conversation summary, missing details, sources, priority, and timestamp.
 - For archived calls: `ended_at`, `summary`, and `outcome` (`completed` or
-  `human_handoff_requested`). Summary currently contains the last four turns.
+  `human_handoff_requested`). The compact `summary` field remains a compatibility
+  snapshot of the last four turns. Versioned structured review content is returned
+  by the dedicated summary API; see [after-call summaries](CALL_SUMMARIES.md).
 
 ## Handoff Behavior
 
@@ -108,6 +117,9 @@ Active and completed call snapshots use SQLite at `data/veyra.sqlite`, overridde
 by `VEYRA_DATABASE_PATH`. Each live-state update is saved, and completed calls are
 saved before being removed from live monitoring. History uses indexed, paginated
 SQL queries. Calls carry `workspace_id: default` for the installation's workspace.
+Structured summary versions and their append-only generation, revision, and acceptance
+events use the same SQLite database. Summary edits never replace the archived call or
+their source version.
 
 Legacy JSON archives are imported transactionally once from `data/calls/` or
 `CALL_HISTORY_DIR`. Originals remain untouched and duplicate IDs do not replace

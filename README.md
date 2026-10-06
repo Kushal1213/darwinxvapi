@@ -12,6 +12,8 @@ Veyra is a knowledge-grounded voice intelligence platform for customer conversat
 - Provides knowledge, analytics, architecture, and service-health views for operators.
 - Delivers explicit human-assistance requests to a durable internal inbox with acknowledgement, resolution, and audit history.
 - Groups repeated retrieval abstentions into a knowledge-owner triage inbox.
+- Produces versioned, evidence-linked after-call summary drafts with operator revision and acceptance history.
+- Supports customer-authored disclosure checklists in advisory shadow mode with effective dates, published-source binding, and human confirmation.
 
 ## Product Areas
 
@@ -20,9 +22,9 @@ Veyra is a knowledge-grounded voice intelligence platform for customer conversat
 | Dashboard | Operational overview and service status |
 | Voice Studio | Live customer-agent conversations with RAG citations |
 | Live Insights | Transcript monitoring, signal detection, and agent nudges |
-| Call History | Completed conversations, source citations, and handoff review |
+| Call History | Completed conversations, source citations, handoff review, and evidence-linked summary approval |
 | Handoff Inbox | Delivered, acknowledged, and resolved human-assistance work |
-| Knowledge Hub | Controlled publication, grounding visibility, and knowledge-gap triage |
+| Knowledge Hub | Controlled publication, grounding visibility, knowledge-gap triage, and disclosure-checklist governance |
 | Analytics | Conversation and retrieval performance views |
 | Architecture | Runtime topology and service relationships |
 
@@ -158,10 +160,26 @@ steps count as observed, and recommends either a customer question or a private
 knowledge search. It is a workflow guide, not a lending or compliance decision. See
 [live playbooks](docs/LIVE_PLAYBOOKS.md) for the contract and current limits.
 
+Knowledge Hub administrators can author disclosure-checklist versions supplied by a
+customer policy owner, bind every topic to published knowledge, and obtain approval
+from a different administrator. Matching calls display conservative advisory states
+and attributed human confirmations in Voice Studio. Veyra bundles no legal checklist;
+see [disclosure shadow mode](docs/DISCLOSURE_CHECKLISTS.md) for its safeguards.
+
+Operational Analytics includes a grounded-guidance funnel with apply/edit/dismiss
+rates, reason-coded rejection, source presence, operator feedback response, generation
+and decision latency, origin, and handoff context. These are interaction metrics—not
+claims of answer correctness, compliance, customer satisfaction, or ROI.
+
 ## Call Review
 
 End a voice call or select **End Session** after a text conversation, then open
 **Call History** to review the transcript, citations, and any human handoff request.
+Call Review also prepares a clearly labelled deterministic summary draft. Each factual
+item links to a transcript turn or saved knowledge citation; operators can create an
+immutable revision and explicitly accept the latest draft. Proposed follow-up actions
+are review items, not proof that an external task or customer contact occurred. See
+[after-call summaries](docs/CALL_SUMMARIES.md) for the lifecycle and limits.
 Explicit requests are atomically delivered to **Handoff Inbox**, where an operator
 can acknowledge and resolve them after the call ends. Internal inbox delivery is
 not presented as a completed phone transfer or external-provider acknowledgement.
@@ -187,10 +205,10 @@ and limitations. Citation presence is not a measure of answer correctness.
 
 ## Use Cases and Next Releases
 
-The first local slices of delivered human handoff and the knowledge-gap inbox are
-implemented. The prioritized product plan also covers external handoff connectors,
-evidence-linked summaries, QA review, customer-owned disclosure checklists, knowledge
-change impact, and operational kill switches. See the
+The first local slices of delivered human handoff, knowledge-gap triage, evidence-linked
+summaries, and customer-owned disclosure shadow mode are implemented. The prioritized
+product plan also covers external handoff connectors, QA review, knowledge change impact,
+and operational kill switches. See the
 [use-case implementation plan](docs/USE_CASE_IMPLEMENTATION_PLAN.md) for dependencies,
 acceptance criteria, estimates, and release sequencing. See the
 [release status](docs/RELEASE_STATUS.md) for the boundary between verified local

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useWorkspaceAuth } from '../components/WorkspaceAuth';
 import KnowledgeGapsPanel from '../components/KnowledgeGapsPanel';
+import DisclosureChecklistPanel from '../components/DisclosureChecklistPanel';
 import {
   EmptyState,
   LoadingState,
@@ -719,6 +720,11 @@ export default function KnowledgeHubPage() {
             </> : <p className="text-sm text-muted">Checking available knowledge…</p>}
           </section>
           <KnowledgeGapsPanel canManage={canManage} documents={documents} />
+          <DisclosureChecklistPanel
+            canManage={canManage}
+            currentUserId={user.id}
+            documents={documents}
+          />
           {canManage && showUpload && (
             <form
               id="knowledge-upload"
