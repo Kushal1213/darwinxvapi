@@ -55,6 +55,7 @@ Browser mutations must carry an allowed Origin. See [workspace access](WORKSPACE
 | `POST /api/voice/session/:id/end` | Archive the call, then remove it from live monitoring |
 | `POST /api/voice/session/:id/nudges/:nudgeId/apply` | Commit one reviewed tip as the next assistant turn |
 | `POST /api/voice/session/:id/guidance/query` | Search approved knowledge privately without creating a customer turn |
+| `GET /api/voice/session/:id/playbook` | Derive versioned live workflow progress from persisted call evidence |
 | `GET /api/voice/history?limit=20&offset=0` | Newest completed calls first; `calls` and `total` |
 | `GET /api/voice/session/:id` | Full live or archived session, including transcript and citations |
 | `GET /api/handoffs?state=open` | Durable internal inbox, ordered by priority and request time |

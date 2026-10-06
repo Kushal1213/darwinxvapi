@@ -34,7 +34,7 @@ Important changes from the previous plan:
 | Retrieval | FAISS plus lexical fallback; market/product hard filters; attributed evidence extraction and explicit abstention | Customer-reviewed isolation/support corpus and calibrated thresholds |
 | Analytics | Persisted workspace metrics, distinct sample counts, unavailable states, filters, and CSV export | No validated pilot ROI or live-provider performance baseline |
 | Providers | Maintained `google-genai` SDK adapter, pinned dependencies, and provider-free contract tests | Account/region availability, limits, terms, and authorized live smoke tests |
-| Verification | 34 gateway + 19 Python + 2 tenant tests, seven-case grounding gate, provider inventory test, and frontend production build passed on 2026-10-06 | Live-provider quality and customer-reviewed corpus remain unproven |
+| Verification | 38 gateway + 19 Python + 2 tenant tests, seven-case grounding gate, provider inventory test, and frontend production build passed on 2026-10-06 | Live-provider quality and customer-reviewed corpus remain unproven |
 
 ## Live Assistance Expansion Roadmap — 2026-10-06
 
@@ -45,7 +45,7 @@ in this order, with each delivered response remaining human-controlled and cited
 | Order | Capability | Delivery slice | Exit evidence |
 | --- | --- | --- | --- |
 | 1 | Private Ask Veyra | Operator-only knowledge search that never enters the customer transcript; editable reply preview; copy or explicit delivery; original and delivered wording retained | Transcript isolation, edit attribution, replay, handoff, expiry, and browser interaction tests |
-| 2 | Intent-driven playbooks | Versioned market/product playbooks with clarification, disclosure, knowledge, and escalation steps | Customer-approved playbook fixtures; deterministic state recovery; no autonomous external actions |
+| 2 | Intent-driven playbooks | First deterministic India-loan definition implemented with cited evidence and human-controlled actions; customer-owned configuration remains | Customer-approved playbook fixtures; immutable configuration versions; no autonomous external actions |
 | 3 | Guidance measurement | Display, selection, edit, dismissal, latency, source, and outcome metrics with denominators | Workspace dashboard and export; usefulness separated from correctness review |
 | 4 | Evidence-linked after-call work | Versioned summary drafts, structured follow-ups, and links to transcript turns and knowledge evidence | Retryable generation, human acceptance/edit audit, curated accuracy review |
 | 5 | Disclosure checklist shadow mode | Customer-owned, effective-dated checklist with observed/missing/uncertain evidence states | Legal/policy owner approval and reviewed false-positive/negative set before live warnings |
@@ -418,8 +418,26 @@ Still open: OCR for scanned PDFs, printed-label mapping when it differs from the
 - Automated tests cover transcript isolation, edited delivery, idempotency, invalid
   text, abstention, handoff blocking, evidence retention, and queue capacity.
 
-Still open: browser interaction evaluation, edit-support warnings, playbooks,
-guidance analytics, reason-coded rejection, and delivery modes beyond speak/add/copy.
+Still open: browser interaction evaluation, edit-support warnings, customer-owned
+playbook configuration/approval, guidance analytics, reason-coded rejection, and
+delivery modes beyond speak/add/copy.
+
+### Intent-driven live playbook first slice — 2026-10-06
+
+- Added code-versioned `india-loan-information` definition `2026-10-06.1` with
+  discovery, grounded knowledge, pricing, and next-step stages.
+- Progress is derived from persisted call evidence, so it recovers after restart
+  without a second mutable workflow record.
+- Knowledge-delivery stages require a cited assistant turn; uncited wording cannot
+  satisfy them. Human handoff pauses automated recommendations.
+- Voice Studio shows progress and transcript evidence, lets operators copy a suggested
+  customer question, or prepares a knowledge action in private Ask Veyra.
+- Automated coverage increased to 38 gateway tests and the frontend production build
+  passes with the new panel.
+
+Still open: interactive browser evaluation, customer-authored definitions, independent
+approval, effective dates, manual confirmation/skip reasons, analytics, and additional
+market-specific playbooks.
 
 ## Definition of Product Progress
 

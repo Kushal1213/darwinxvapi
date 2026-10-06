@@ -152,6 +152,12 @@ knowledge without adding the question to the customer transcript. The resulting 
 reply can be reviewed, edited, copied, and explicitly spoken or added to text chat.
 Veyra preserves the generated and delivered wording with operator attribution.
 
+The India loan demo also exposes a versioned **Live playbook**. It derives observed
+steps from persisted transcript evidence, requires citations before knowledge-delivery
+steps count as observed, and recommends either a customer question or a private
+knowledge search. It is a workflow guide, not a lending or compliance decision. See
+[live playbooks](docs/LIVE_PLAYBOOKS.md) for the contract and current limits.
+
 ## Call Review
 
 End a voice call or select **End Session** after a text conversation, then open

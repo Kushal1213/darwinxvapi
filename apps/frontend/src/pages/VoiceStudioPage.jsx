@@ -9,6 +9,7 @@ import { Mic, PhoneOff, Phone, Search, Send, CheckCircle2, Globe } from 'lucide-
 import { io as socketIO } from 'socket.io-client';
 import { useWorkspaceAuth } from '../components/WorkspaceAuth';
 import NudgeFeed from '../components/NudgeFeed';
+import LivePlaybook from '../components/LivePlaybook';
 
 // ─── Market Profiles ──────────────────────────────────────────
 const MARKETS = {
@@ -821,6 +822,12 @@ export default function VoiceStudioPage() {
     }
   }, [guidanceBusy, guidanceQuestion]);
 
+  const preparePrivateGuidance = useCallback((question) => {
+    setGuidanceQuestion(question);
+    setGuidanceMessage('Playbook question prepared. Review it, then search approved knowledge.');
+    setGuidanceError('');
+  }, []);
+
   const applyGuidedNudge = useCallback(
     async (nudge, responseText) => {
       const callId = sessionIdRef.current;
@@ -1136,6 +1143,13 @@ export default function VoiceStudioPage() {
                 {guidanceMessage && <p role="status" className="text-xs text-muted">{guidanceMessage}</p>}
                 {guidanceError && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{guidanceError}</p>}
               </form>
+              <div className="mb-5">
+                <LivePlaybook
+                  callId={sessionIdRef.current}
+                  turnCount={messages.length}
+                  onPrepareGuidance={preparePrivateGuidance}
+                />
+              </div>
               <NudgeFeed
                 callId={sessionIdRef.current}
                 title="Live guidance"

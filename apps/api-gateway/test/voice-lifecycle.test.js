@@ -140,6 +140,13 @@ test('voice sessions, handoff, archive and restart', { timeout: 30000 }, async (
     assert.equal(turn.data.sources[0].page, 7);
     assert.equal(retrieveBodies.at(-1).market, 'india');
     assert.equal(retrieveBodies.at(-1).product, 'loan');
+    const playbook = await api('/session/review-call/playbook');
+    assert.equal(playbook.status, 200);
+    assert.equal(playbook.data.playbook.id, 'india-loan-information');
+    assert.equal(playbook.data.playbook.version, '2026-10-06.1');
+    assert.equal(playbook.data.playbook.detected_intent, 'loan_inquiry');
+    assert.ok(playbook.data.playbook.observed_steps >= 1);
+    assert.ok(playbook.data.playbook.next_step.action.text);
     const repeated = await api('/session', { call_id: 'review-call' });
     assert.equal(repeated.data.session.turns.length, 2);
   });
@@ -150,6 +157,7 @@ test('voice sessions, handoff, archive and restart', { timeout: 30000 }, async (
     assert.equal(insurance.data.session.market, 'india-insurance');
     assert.equal(retrieveBodies.at(-1).market, 'india');
     assert.equal(retrieveBodies.at(-1).product, 'insurance');
+    assert.equal((await api('/session/insurance-scope/playbook')).data.playbook, null);
     assert.equal((await api('/session', { call_id: 'bad-market', market: 'mars' })).status, 400);
     await api('/session/insurance-scope/end', {});
   });
@@ -223,6 +231,7 @@ test('voice sessions, handoff, archive and restart', { timeout: 30000 }, async (
     assert.equal(turn.data.session.status, 'escalated');
     assert.equal(turn.data.escalation.sources[0].source, 'loan-policy');
     assert.equal(turn.data.escalation.last_customer_message, 'I want to talk to a human');
+    assert.equal((await api('/session/review-call/playbook')).data.playbook.paused_for_handoff, true);
     const repeated = await api('/escalate', { call_id: 'review-call' });
     assert.equal(repeated.data.escalation_id, turn.data.escalation.escalation_id);
     const inbox = await api('/../handoffs?state=open');
@@ -265,6 +274,7 @@ test('voice sessions, handoff, archive and restart', { timeout: 30000 }, async (
     assert.equal(first.turns.length, 4);
     await api('/session/review-call/end', {});
     assert.equal((await api('/session/review-call')).data.ended_at, first.ended_at);
+    assert.equal((await api('/session/review-call/playbook')).status, 404);
     assert.equal((await api('/live')).data.calls.length, 0);
     assert.equal((await api('/query', { call_id: 'review-call', query: 'hello' })).status, 409);
     assert.equal((await api('/session', { call_id: 'review-call' })).status, 409);
@@ -377,6 +387,9 @@ test('voice sessions, handoff, archive and restart', { timeout: 30000 }, async (
     const recoveredSession = (await api('/session/recover-active')).data;
     assert.equal(recoveredSession.turns.length, 2);
     assert.equal(recoveredSession.turns[1].sources[0].page, 7);
+    const recoveredPlaybook = await api('/session/recover-active/playbook');
+    assert.equal(recoveredPlaybook.data.playbook.version, '2026-10-06.1');
+    assert.ok(recoveredPlaybook.data.playbook.observed_steps >= 1);
     const resumed = await api('/query', { call_id: 'recover-active', query: 'loan amount' });
     assert.equal(resumed.data.session.turns.length, 4);
     await api('/session/recover-active/end', {});

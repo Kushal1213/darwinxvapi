@@ -6,6 +6,7 @@ import { createCallHistory } from '../services/call-history.js';
 import { getNudgeStore } from '../services/nudges.js';
 import { persistHandoffEscalation } from '../services/handoff-deliveries.js';
 import { recordKnowledgeGap } from '../services/knowledge-gaps.js';
+import { evaluatePlaybook } from '../services/playbooks.js';
 
 const router = express.Router();
 
@@ -596,6 +597,22 @@ router.get('/session/:id', (req, res) => {
   const session = conversations.get(req.params.id) || callHistory().get(req.params.id);
   if (!session) return res.status(404).json({ error: 'Session not found' });
   res.json(session);
+});
+
+/**
+ * GET /api/voice/session/:id/playbook
+ * Return deterministic live workflow progress derived from persisted call evidence.
+ */
+router.get('/session/:id/playbook', (req, res) => {
+  const session = conversations.get(req.params.id);
+  if (!session || !isLive(session)) return res.status(404).json({ error: 'Active session not found' });
+  const playbook = evaluatePlaybook(session);
+  return res.json({
+    call_id: session.call_id,
+    playbook,
+    reason: playbook ? null : 'No versioned playbook is available for this market.',
+    evaluated_at: new Date().toISOString(),
+  });
 });
 
 /**

@@ -26,7 +26,7 @@ deployment boundaries, and a closed improvement loop—not generic RAG alone.
 | ID | Use case | Primary actor | Current foundation | Priority | Recommendation |
 | --- | --- | --- | --- | --- | --- |
 | UC-01 | Grounded policy assistance | Operator | Implemented: scoped retrieval, citations, abstention, voice/text sessions | P0 hardening | Pilot after customer corpus and live-provider gates |
-| UC-01A | Live guidance console | Operator | First slice implemented: private search, editable/copyable cited reply, controlled delivery, and audit evidence | P0 enhancement | Run browser evaluation, then add versioned playbooks and measurement |
+| UC-01A | Live guidance console | Operator | Private search/editable delivery plus first versioned India-loan playbook implemented | P0 enhancement | Run browser evaluation, then add guidance measurement and customer-owned playbook approval |
 | UC-02 | Delivered human handoff | Operator and supervisor | Durable internal delivery, acknowledgement, resolution, and audit events implemented | P0 hardening | Select and validate one external connector before claiming transfer |
 | UC-03 | Knowledge-gap inbox | Knowledge owner | Deterministic grouping, counts, states, revision-gated resolution, UI, and audit events implemented | P1 hardening | Add regression-case execution and retention policy |
 | UC-04 | Evidence-linked after-call summary | Operator and reviewer | Current summary is only the last four turns | P1 | Build as a draft requiring review |
@@ -66,8 +66,8 @@ wording, delivered wording, evidence, operator, and timestamps for review.
 
 ### Follow-up slices
 
-1. Versioned intent playbooks and customer-approved next steps.
-2. Guidance effectiveness analytics and reason-coded rejection.
+1. Guidance effectiveness analytics and reason-coded rejection.
+2. Customer-owned playbook configuration, approval, and effective versions.
 3. Sentence-level evidence warnings for operator edits.
 4. Evidence-linked summaries and manual QA/coaching.
 5. Customer-owned disclosure checklist in shadow mode.

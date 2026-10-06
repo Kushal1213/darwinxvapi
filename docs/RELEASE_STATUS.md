@@ -16,6 +16,7 @@ because local tests pass.
 - Knowledge-gap grouping and triage with privacy-minimized excerpts, recurrence counts, reopen behavior, and published-revision validation.
 - Operator-guided grounded replies that pause, preview, apply, render, and speak with citation and actor attribution.
 - Private operator knowledge search plus editable/copyable grounded replies that preserve generated and delivered wording without adding artificial customer turns.
+- Versioned India-loan live playbook with deterministic transcript evidence, cited knowledge-step requirements, restart recovery, and human-controlled recommended actions.
 - Maintained Google Gen AI SDK adapter and provider-free contract/grounding tests.
 - Zero advisories in the npm production dependency graph on the review date.
 
