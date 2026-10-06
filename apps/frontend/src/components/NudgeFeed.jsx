@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, X, RefreshCw } from 'lucide-react';
+import { Check, Play, Sparkles, X, RefreshCw } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { EmptyState, LoadingState } from './WorkspaceUI';
 
@@ -7,7 +7,7 @@ const isActive = (nudge) =>
   ['created', 'displayed'].includes(nudge.status) &&
   Date.parse(nudge.expires_at) > Date.now();
 
-export default function NudgeFeed({ callId = null, review = false }) {
+export default function NudgeFeed({ callId = null, review = false, onApply = null, title = 'Operator nudges' }) {
   const [nudges, setNudges] = useState([]);
   const [view, setView] = useState(review ? 'all' : 'active');
   const [loading, setLoading] = useState(true);
@@ -95,12 +95,29 @@ export default function NudgeFeed({ callId = null, review = false }) {
     }
   }
 
+  async function applyNudge(nudge) {
+    if (!onApply) return;
+    const current = generation.current;
+    setBusy((previous) => ({ ...previous, [nudge.id]: true }));
+    try {
+      await onApply(nudge);
+      if (current === generation.current) {
+        setActionError('');
+        setRevision((value) => value + 1);
+      }
+    } catch (err) {
+      if (current === generation.current) setActionError(err.message);
+    } finally {
+      setBusy((previous) => ({ ...previous, [nudge.id]: false }));
+    }
+  }
+
   // Mark a nudge displayed only when its row is actually mounted in the feed.
   const visible = nudges.filter((nudge) => view === 'all' || isActive(nudge));
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="panel-title">Operator nudges</h2>
+        <h2 className="panel-title">{title}</h2>
         <div className="flex items-center gap-3">
           <div role="group" aria-label="Nudge view" className="flex gap-1">
             {[
@@ -160,6 +177,7 @@ export default function NudgeFeed({ callId = null, review = false }) {
             nudge={nudge}
             busy={busy[nudge.id]}
             onAction={act}
+            onApply={onApply ? applyNudge : null}
             showCall={!callId}
           />
         ))}
@@ -168,7 +186,7 @@ export default function NudgeFeed({ callId = null, review = false }) {
   );
 }
 
-function NudgeRow({ nudge, busy, onAction, showCall }) {
+function NudgeRow({ nudge, busy, onAction, onApply, showCall }) {
   const displayed = useRef(false);
   useEffect(() => {
     if (nudge.status === 'created' && isActive(nudge) && !displayed.current) {
@@ -199,18 +217,43 @@ function NudgeRow({ nudge, busy, onAction, showCall }) {
         <p className="text-xs break-all text-muted">Call {nudge.call_id}</p>
       )}
       <p className="text-sm break-words">{nudge.text}</p>
+      {nudge.type === 'knowledge_tip' && nudge.suggested_response && (
+        <div className="signal-tile space-y-2">
+          <p className="text-xs font-semibold flex items-center gap-2">
+            <Sparkles size={14} className="text-accent" /> Suggested reply
+          </p>
+          <p className="text-sm whitespace-pre-wrap break-words">
+            {nudge.suggested_response}
+          </p>
+          {nudge.sources?.length > 0 && (
+            <p className="text-[10px] text-muted">
+              Grounded in {nudge.sources.map((source) => source.title || source.source || 'knowledge').join(', ')}
+            </p>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap items-end gap-3">
         {active && (
           <>
-            <button
-              disabled={busy}
-              aria-label="Acknowledge nudge"
-              title="Acknowledge nudge"
-              onClick={() => onAction(nudge.id, 'acknowledged')}
-              className="p-2 border rounded-md border-[var(--accent)] text-accent disabled:opacity-40"
-            >
-              <Check size={18} />
-            </button>
+            {nudge.type === 'knowledge_tip' && onApply ? (
+              <button
+                disabled={busy}
+                onClick={() => onApply(nudge)}
+                className="btn btn-primary"
+              >
+                <Play size={15} /> Use this reply
+              </button>
+            ) : nudge.type !== 'knowledge_tip' ? (
+              <button
+                disabled={busy}
+                aria-label="Acknowledge nudge"
+                title="Acknowledge nudge"
+                onClick={() => onAction(nudge.id, 'acknowledged')}
+                className="p-2 border rounded-md border-[var(--accent)] text-accent disabled:opacity-40"
+              >
+                <Check size={18} />
+              </button>
+            ) : null}
             <button
               disabled={busy}
               aria-label="Dismiss nudge"

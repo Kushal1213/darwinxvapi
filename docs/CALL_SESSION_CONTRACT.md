@@ -34,6 +34,12 @@ Reusing a completed ID returns 409. Concurrent queries for one call return 409.
 Ending a call is idempotent; late retrieval results and transcript webhooks cannot
 reopen or change an archived call.
 
+In guided mode, greetings, handoff acknowledgements, and safe clarification responses
+remain immediate. A supported policy answer is stored in a time-limited knowledge tip
+with its citations and is not added to the assistant transcript until an operator applies
+it. Applying is idempotent, attributed to the signed-in account, and blocked for expired,
+dismissed, cross-call, completed-call, or active-handoff cases.
+
 ## API
 
 These endpoints require an authenticated admin or operator cookie session.
@@ -43,9 +49,11 @@ Browser mutations must carry an allowed Origin. See [workspace access](WORKSPACE
 |---|---|
 | `POST /api/voice/session` | Create a session; optional `call_id`, supported UI `market`, `language` |
 | `POST /api/voice/query` | Record a customer turn and return an answer and sources |
+| `POST /api/voice/query` with `guided_mode: true` | Pause a supported answer as a grounded `knowledge_tip` |
 | `GET /api/voice/live` | Current created, active, and escalated calls |
 | `POST /api/voice/escalate` | Request a handoff for an existing live call |
 | `POST /api/voice/session/:id/end` | Archive the call, then remove it from live monitoring |
+| `POST /api/voice/session/:id/nudges/:nudgeId/apply` | Commit one reviewed tip as the next assistant turn |
 | `GET /api/voice/history?limit=20&offset=0` | Newest completed calls first; `calls` and `total` |
 | `GET /api/voice/session/:id` | Full live or archived session, including transcript and citations |
 | `GET /api/handoffs?state=open` | Durable internal inbox, ordered by priority and request time |

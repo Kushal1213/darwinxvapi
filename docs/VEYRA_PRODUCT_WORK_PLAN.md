@@ -34,7 +34,7 @@ Important changes from the previous plan:
 | Retrieval | FAISS plus lexical fallback; market/product hard filters; attributed evidence extraction and explicit abstention | Customer-reviewed isolation/support corpus and calibrated thresholds |
 | Analytics | Persisted workspace metrics, distinct sample counts, unavailable states, filters, and CSV export | No validated pilot ROI or live-provider performance baseline |
 | Providers | Maintained `google-genai` SDK adapter, pinned dependencies, and provider-free contract tests | Account/region availability, limits, terms, and authorized live smoke tests |
-| Verification | 31 gateway + 19 Python + 2 tenant tests, seven-case grounding gate, provider inventory test, and frontend production build passed on 2026-10-06 | Live-provider quality and customer-reviewed corpus remain unproven |
+| Verification | 34 gateway + 19 Python + 2 tenant tests, seven-case grounding gate, provider inventory test, and frontend production build passed on 2026-10-06 | Live-provider quality and customer-reviewed corpus remain unproven |
 
 Evidence inspected for this revision:
 
@@ -290,6 +290,7 @@ Third implementation milestone: persistent operator nudges and feedback.
 - Live nudges now have server-generated IDs and survive refreshes and gateway restarts.
 - Operators can acknowledge, dismiss, and rate nudges in Mission Control and Call Review.
 - A three-active-nudge limit, priority replacement, duplicate suppression, and expiry keep the queue bounded.
+- Grounded product answers can pause as a separate live guidance tip; applying the tip records and renders or speaks one attributed assistant turn without consuming safety-alert capacity.
 - SQLite records lifecycle events and operator attribution; authenticated APIs expose the history.
 - Gateway tests cover generation, actions, restart recovery, expiry, and socket dismissal.
 

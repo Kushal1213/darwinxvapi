@@ -3,10 +3,13 @@ import { z } from 'zod';
 import { getDatabase } from './database.js';
 
 const inputSchema = z.object({
-  type: z.enum(['missed_cross_sell', 'compliance_gap', 'rising_frustration', 'payment_difficulty', 'buying_signal', 'human_escalation']),
+  type: z.enum(['missed_cross_sell', 'compliance_gap', 'rising_frustration', 'payment_difficulty', 'buying_signal', 'human_escalation', 'knowledge_tip']),
   text: z.string().trim().min(1).max(2000),
   priority: z.enum(['HIGH', 'MEDIUM', 'LOW']),
-  confidence: z.number().min(0).max(1),
+  confidence: z.number().min(0).max(1).nullable().optional().default(null),
+  suggested_response: z.string().trim().min(1).max(8000).optional(),
+  context_query: z.string().trim().min(1).max(8000).optional(),
+  sources: z.array(z.record(z.unknown())).max(5).optional().default([]),
   latency_ms: z.number().min(0).optional().default(0),
   expires_after_seconds: z.number().min(1).max(300).optional().default(45),
 });
@@ -50,15 +53,28 @@ export function createNudgeStore(db = getDatabase(), now = () => Date.now()) {
       if (call.status === 'completed') fail(409, 'Call has ended');
       expire();
       const recent = db.prepare("SELECT payload FROM nudges WHERE call_id=? ORDER BY json_extract(payload, '$.created_at') DESC LIMIT 50").all(callId).map((row) => JSON.parse(row.payload));
-      const duplicate = recent.find((n) => n.type === parsed.data.type && n.text === parsed.data.text && now() - Date.parse(n.created_at) < 15000);
+      const duplicate = recent.find((n) =>
+        n.type === parsed.data.type &&
+        n.text === parsed.data.text &&
+        now() - Date.parse(n.created_at) < 15000 &&
+        (parsed.data.type !== 'knowledge_tip' || (
+          active(n) &&
+          n.context_query === parsed.data.context_query &&
+          n.suggested_response === parsed.data.suggested_response
+        ))
+      );
       if (duplicate) return { nudge: duplicate, created: false };
       const nudge = { ...parsed.data, id: randomUUID(), call_id: callId, status: 'created', feedback: null,
         created_at: stamp(), updated_at: stamp(), ts: stamp(), expires_at: new Date(now() + parsed.data.expires_after_seconds * 1000).toISOString() };
       transaction(() => {
         const pending = db.prepare("SELECT payload FROM nudges WHERE call_id=? AND status IN ('created', 'displayed')").all(callId).map((row) => JSON.parse(row.payload));
-        if (pending.length >= 3) {
+        const capacityPool = nudge.type === 'knowledge_tip'
+          ? pending.filter((item) => item.type === 'knowledge_tip')
+          : pending.filter((item) => item.type !== 'knowledge_tip');
+        const capacity = nudge.type === 'knowledge_tip' ? 1 : 3;
+        if (capacityPool.length >= capacity) {
           const weight = { LOW: 0, MEDIUM: 1, HIGH: 2 };
-          const victim = pending.sort((a, b) => weight[a.priority] - weight[b.priority] || a.created_at.localeCompare(b.created_at))[0];
+          const victim = capacityPool.sort((a, b) => weight[a.priority] - weight[b.priority] || a.created_at.localeCompare(b.created_at))[0];
           if (weight[victim.priority] > weight[nudge.priority]) fail(409, 'Higher-priority nudges are already active');
           save({ ...victim, status: 'expired', updated_at: stamp() }, 'replaced');
         }
@@ -72,6 +88,30 @@ export function createNudgeStore(db = getDatabase(), now = () => Date.now()) {
         ? db.prepare("SELECT payload FROM nudges WHERE call_id=? ORDER BY json_extract(payload, '$.created_at') DESC, id LIMIT ?").all(callId, limit)
         : db.prepare("SELECT payload FROM nudges ORDER BY json_extract(payload, '$.created_at') DESC, id LIMIT ?").all(limit))
         .map((row) => JSON.parse(row.payload));
+    },
+    get(id) {
+      expire();
+      return read(id);
+    },
+    apply(id, actor, persistTurn) {
+      expire();
+      const nudge = read(id);
+      if (!nudge) fail(404, 'Nudge not found');
+      if (nudge.type !== 'knowledge_tip' || !nudge.suggested_response) fail(409, 'This nudge cannot guide a response');
+      if (nudge.status === 'applied') return { nudge, applied: false };
+      if (!active(nudge)) fail(409, 'This nudge is already resolved or expired');
+      const updated = {
+        ...nudge,
+        status: 'applied',
+        acted_by: actor,
+        acted_at: stamp(),
+        updated_at: stamp(),
+      };
+      transaction(() => {
+        persistTurn(nudge);
+        save(updated, 'applied', actor);
+      });
+      return { nudge: updated, applied: true };
     },
     act(id, action, actor) {
       if (!nudgeActionSchema.safeParse({ action }).success) fail(400, 'Invalid nudge action');

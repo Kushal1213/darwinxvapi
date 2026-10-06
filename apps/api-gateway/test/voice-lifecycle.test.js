@@ -154,6 +154,38 @@ test('voice sessions, handoff, archive and restart', { timeout: 30000 }, async (
     await api('/session/insurance-scope/end', {});
   });
 
+  await t.test('guided mode pauses a grounded answer until an operator applies its tip', async () => {
+    assert.equal((await api('/query', { call_id: 'guided-invalid', query: 'loan income', guided_mode: 'yes' })).status, 400);
+    const suggestion = await api('/query', { call_id: 'guided-call', query: 'loan income', guided_mode: true });
+    assert.equal(suggestion.status, 200);
+    assert.equal(suggestion.data.answer, null);
+    assert.equal(suggestion.data.response_kind, 'guided_suggestion');
+    assert.equal(suggestion.data.session.turns.length, 1);
+    assert.equal(suggestion.data.suggestion.type, 'knowledge_tip');
+    assert.equal(suggestion.data.suggestion.suggested_response, 'Policy answer');
+    assert.equal(suggestion.data.suggestion.sources[0].page, 7);
+    const applied = await api(`/session/guided-call/nudges/${suggestion.data.suggestion.id}/apply`, {});
+    assert.equal(applied.status, 200);
+    assert.equal(applied.data.answer, 'Policy answer');
+    assert.equal(applied.data.nudge.status, 'applied');
+    assert.equal(applied.data.turn.guided_by_nudge_id, suggestion.data.suggestion.id);
+    assert.equal(applied.data.turn.sources[0].page, 7);
+    const replayed = await api(`/session/guided-call/nudges/${suggestion.data.suggestion.id}/apply`, {});
+    assert.equal(replayed.data.replayed, true);
+    assert.equal((await api('/session/guided-call')).data.turns.length, 2);
+    const events = await api(`/../nudges/${suggestion.data.suggestion.id}/events`);
+    assert.deepEqual(events.data.events.map((event) => event.action), ['created', 'applied']);
+    assert.ok(events.data.events[1].actor_id);
+    const nextSuggestion = await api('/query', { call_id: 'guided-call', query: 'loan amount', guided_mode: true });
+    assert.equal(nextSuggestion.data.response_kind, 'guided_suggestion');
+    assert.notEqual(nextSuggestion.data.suggestion.id, suggestion.data.suggestion.id);
+    assert.equal(nextSuggestion.data.suggestion.status, 'created');
+    const handoff = await api('/query', { call_id: 'guided-call', query: 'I need a human', guided_mode: true });
+    assert.equal(handoff.data.session.status, 'escalated');
+    assert.equal((await api(`/session/guided-call/nudges/${nextSuggestion.data.suggestion.id}/apply`, {})).status, 409);
+    await api('/session/guided-call/end', {});
+  });
+
   await t.test('human handoff skips retrieval and includes context', async () => {
     const before = requests;
     const turn = await api('/query', { call_id: 'review-call', query: 'I want to talk to a human' });
@@ -166,10 +198,12 @@ test('voice sessions, handoff, archive and restart', { timeout: 30000 }, async (
     assert.equal(repeated.data.escalation_id, turn.data.escalation.escalation_id);
     const inbox = await api('/../handoffs?state=open');
     assert.equal(inbox.status, 200);
-    assert.equal(inbox.data.total, 1);
-    assert.equal(inbox.data.handoffs[0].escalation_id, turn.data.escalation.escalation_id);
-    assert.equal(inbox.data.handoffs[0].state, 'delivered');
-    reviewDeliveryId = inbox.data.handoffs[0].id;
+    assert.equal(inbox.data.total, 2);
+    const reviewDelivery = inbox.data.handoffs.find((item) => item.call_id === 'review-call');
+    assert.ok(reviewDelivery);
+    assert.equal(reviewDelivery.escalation_id, turn.data.escalation.escalation_id);
+    assert.equal(reviewDelivery.state, 'delivered');
+    reviewDeliveryId = reviewDelivery.id;
     const detail = await api(`/../handoffs/${reviewDeliveryId}`);
     assert.deepEqual(detail.data.events.map((event) => event.action), ['requested', 'delivered']);
     const acknowledged = await api(`/../handoffs/${reviewDeliveryId}/acknowledge`, {});
@@ -298,7 +332,7 @@ test('voice sessions, handoff, archive and restart', { timeout: 30000 }, async (
     assert.deepEqual(events.map((event) => event.action), ['created', 'acknowledged', 'useful']);
     assert.ok(events[1].actor_id);
     const history = await api('/history?limit=1&offset=0');
-    assert.equal(history.data.total, 6);
+    assert.equal(history.data.total, 7);
     assert.equal(history.data.calls.length, 1);
     assert.equal(history.data.calls[0].turns, undefined);
     assert.equal((await api('/session/review-call')).data.escalations.length, 1);

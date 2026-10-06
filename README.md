@@ -140,6 +140,13 @@ dismiss active alerts, and record usefulness feedback in Mission Control or Call
 Review. See [operator nudge rules](docs/NUDGE_WORKFLOW.md) for expiry, priority,
 duplicate suppression, and the feedback API.
 
+Voice Studio enables **Agent-guided replies** by default. For grounded product
+questions, the bot pauses before answering and presents the cited response as a live
+tip. Selecting **Use this reply** records it as the next assistant turn and speaks it
+during a voice call; in text mode it appears in the conversation. A newer product
+question replaces an unselected older tip without displacing compliance or escalation
+alerts.
+
 ## Call Review
 
 End a voice call or select **End Session** after a text conversation, then open

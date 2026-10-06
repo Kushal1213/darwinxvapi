@@ -8,6 +8,7 @@ import {
 import { Mic, PhoneOff, Phone, Send, CheckCircle2, Globe } from 'lucide-react';
 import { io as socketIO } from 'socket.io-client';
 import { useWorkspaceAuth } from '../components/WorkspaceAuth';
+import NudgeFeed from '../components/NudgeFeed';
 
 // ─── Market Profiles ──────────────────────────────────────────
 const MARKETS = {
@@ -106,6 +107,7 @@ export default function VoiceStudioPage() {
   const [micStatus, setMicStatus] = useState('unknown');
   const [useTextMode, setUseTextMode] = useState(false);
   const [isListening, setIsListening] = useState(false); // mic capturing
+  const [guidedMode, setGuidedMode] = useState(true);
 
   const recognitionRef = useRef(null);
   const audioCtxRef = useRef(null);
@@ -116,6 +118,7 @@ export default function VoiceStudioPage() {
   const callStateRef = useRef('idle'); // mirror of callState for event handlers
   const isSpeakingRef = useRef(false); // mirror of isSpeaking
   const requestAbortRef = useRef(null);
+  const speechGenerationRef = useRef(0);
   const stageTimerRef = useRef(null);
   const sessionIdRef = useRef(null);
   const [hasSession, setHasSession] = useState(false);
@@ -376,6 +379,7 @@ export default function VoiceStudioPage() {
     () => () => {
       callStateRef.current = 'idle';
       requestAbortRef.current?.abort();
+      speechGenerationRef.current += 1;
       window.speechSynthesis?.cancel();
       stopMicVisualization();
     },
@@ -420,6 +424,7 @@ export default function VoiceStudioPage() {
             call_id: callId,
             market,
             language: MARKETS[market]?.lang || 'en-IN',
+            guided_mode: guidedMode,
           }),
           signal: controller.signal,
         });
@@ -440,6 +445,20 @@ export default function VoiceStudioPage() {
           llm: data.llm_latency_ms,
           gateway: ragMs - (data.latency_ms || 0),
         }));
+
+        if (data.response_kind === 'guided_suggestion') {
+          setActiveStage(null);
+          isProcessingRef.current = false;
+          accumulatedSpeechRef.current = '';
+          if (callStateRef.current === 'active') {
+            setTimeout(() => {
+              try {
+                recognitionRef.current?.start();
+              } catch (_) {}
+            }, 200);
+          }
+          return;
+        }
 
         const answer =
           data.answer ||
@@ -469,7 +488,9 @@ export default function VoiceStudioPage() {
             'Text-to-speech is not available in this browser. Use Chrome or Edge.'
           );
         }
+        speechGenerationRef.current += 1;
         window.speechSynthesis.cancel(); // clear any queued speech
+        const speechGeneration = speechGenerationRef.current;
 
         const cleanAnswerForSpeech = answer
           .replace(/\|/g, ', ')
@@ -502,6 +523,7 @@ export default function VoiceStudioPage() {
         if (preferred) utterance.voice = preferred;
 
         utterance.onend = () => {
+          if (speechGeneration !== speechGenerationRef.current) return;
           setIsSpeaking(false);
           isSpeakingRef.current = false;
           setActiveStage(null);
@@ -516,6 +538,7 @@ export default function VoiceStudioPage() {
           }
         };
         utterance.onerror = (e) => {
+          if (speechGeneration !== speechGenerationRef.current) return;
           console.warn('TTS error:', e);
           setIsSpeaking(false);
           isSpeakingRef.current = false;
@@ -562,7 +585,7 @@ export default function VoiceStudioPage() {
           requestAbortRef.current = null;
       }
     },
-    [ensureSession, market]
+    [ensureSession, guidedMode, market]
   );
 
   // ── Start Voice Call ──
@@ -641,6 +664,7 @@ export default function VoiceStudioPage() {
     try {
       recognitionRef.current?.abort();
     } catch (_) {}
+    speechGenerationRef.current += 1;
     window.speechSynthesis?.cancel();
     stopMicVisualization();
     isProcessingRef.current = false;
@@ -708,6 +732,7 @@ export default function VoiceStudioPage() {
             call_id: callId,
             market,
             language: MARKETS[market]?.lang || 'en-IN',
+            guided_mode: guidedMode,
           }),
         });
         if (!res.ok) {
@@ -719,6 +744,10 @@ export default function VoiceStudioPage() {
         const data = await res.json();
         setActiveStage('llm');
         setTotalCallLatency(data.latency_ms);
+        if (data.response_kind === 'guided_suggestion') {
+          setActiveStage(null);
+          return;
+        }
         setMessages((prev) => [
           ...prev,
           {
@@ -750,7 +779,100 @@ export default function VoiceStudioPage() {
         setIsTextProcessing(false);
       }
     },
-    [ensureSession, inputText, isTextProcessing, market]
+    [ensureSession, guidedMode, inputText, isTextProcessing, market]
+  );
+
+  const applyGuidedNudge = useCallback(
+    async (nudge) => {
+      const callId = sessionIdRef.current;
+      if (!callId) throw new Error('Start a session before using a guided reply.');
+      if (isProcessingRef.current && !isSpeakingRef.current) {
+        throw new Error('Wait for the current customer turn to finish processing.');
+      }
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      try {
+        recognitionRef.current?.stop();
+      } catch (_) {}
+      speechGenerationRef.current += 1;
+      window.speechSynthesis?.cancel();
+      isProcessingRef.current = true;
+      isSpeakingRef.current = false;
+      setIsSpeaking(false);
+      setIsTextProcessing(true);
+      setActiveStage('gateway');
+      try {
+        const response = await fetch(
+          `/api/voice/session/${encodeURIComponent(callId)}/nudges/${encodeURIComponent(nudge.id)}/apply`,
+          { method: 'POST' }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not apply this guided reply.');
+        setMessages((previous) => previous.some((message) => message.guided_by_nudge_id === nudge.id)
+          ? previous
+          : [...previous, {
+              ...data.turn,
+              id: `guided-${nudge.id}`,
+              agentName: `${MARKETS[market]?.agent || 'Veyra'} (guided)`,
+            }]);
+        setActiveStage(null);
+
+        if (useTextMode || !window.speechSynthesis || typeof window.SpeechSynthesisUtterance === 'undefined') {
+          isProcessingRef.current = false;
+          if (!useTextMode) setError('The guided reply was added to the conversation, but text-to-speech is unavailable in this browser.');
+          return;
+        }
+
+        const cleanAnswer = data.answer
+          .replace(/\|/g, ', ')
+          .replace(/[\*\#\`\_]/g, '')
+          .replace(/\bINR\b/g, 'Rupees')
+          .replace(/\s+/g, ' ')
+          .trim();
+        const utterance = new window.SpeechSynthesisUtterance(cleanAnswer);
+        const speechGeneration = speechGenerationRef.current;
+        utterance.lang = MARKETS[market]?.lang || 'en-IN';
+        utterance.rate = 1.05;
+        const voices = window.speechSynthesis.getVoices();
+        const languagePrefix = utterance.lang.split('-')[0].toLowerCase();
+        utterance.voice = voices.find((voice) =>
+          voice.lang.toLowerCase().startsWith(languagePrefix) &&
+          voice.name.toLowerCase().includes('female')) ||
+          voices.find((voice) => voice.lang.toLowerCase().startsWith(languagePrefix)) || voices[0];
+        const finish = () => {
+          if (speechGeneration !== speechGenerationRef.current) return;
+          setIsSpeaking(false);
+          isSpeakingRef.current = false;
+          isProcessingRef.current = false;
+          if (callStateRef.current === 'active') {
+            setTimeout(() => {
+              try {
+                recognitionRef.current?.start();
+              } catch (_) {}
+            }, 200);
+          }
+        };
+        utterance.onend = finish;
+        utterance.onerror = finish;
+        setIsSpeaking(true);
+        isSpeakingRef.current = true;
+        setActiveStage('tts');
+        window.speechSynthesis.speak(utterance);
+      } catch (error) {
+        isProcessingRef.current = false;
+        setActiveStage(null);
+        if (callStateRef.current === 'active') {
+          setTimeout(() => {
+            try {
+              recognitionRef.current?.start();
+            } catch (_) {}
+          }, 300);
+        }
+        throw error;
+      } finally {
+        setIsTextProcessing(false);
+      }
+    },
+    [market, useTextMode]
   );
 
   const isCallActive = callState === 'active';
@@ -889,6 +1011,21 @@ export default function VoiceStudioPage() {
               {current.lang} · {current.name}
             </p>
             <div className="space-y-2">
+              <label className="signal-tile !p-3 flex gap-3 items-start text-xs mb-3">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={guidedMode}
+                  disabled={isTextProcessing || isConnecting}
+                  onChange={(event) => setGuidedMode(event.target.checked)}
+                />
+                <span>
+                  <strong className="block">Agent-guided replies</strong>
+                  <span className="block text-muted mt-1 leading-5">
+                    Pause grounded product answers until you select a live tip.
+                  </span>
+                </span>
+              </label>
               {!isCallActive && !useTextMode && (
                 <button
                   onClick={startCall}
@@ -922,6 +1059,15 @@ export default function VoiceStudioPage() {
                   : 'Allow microphone access to begin. Text mode is always available.'}
             </p>
           </div>
+          {hasSession && (
+            <div className="border-t mt-5 pt-5">
+              <NudgeFeed
+                callId={sessionIdRef.current}
+                title="Live guidance"
+                onApply={applyGuidedNudge}
+              />
+            </div>
+          )}
         </aside>
         <section
           className="panel conversation-panel"

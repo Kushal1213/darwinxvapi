@@ -266,7 +266,7 @@ async function runVoiceTurn(options) {
   }
 }
 
-async function processVoiceTurn({ callId, query, market, language, recordUser = true, emitUser = true }) {
+async function processVoiceTurn({ callId, query, market, language, recordUser = true, emitUser = true, guidedMode = false }) {
   const startedAt = Date.now();
   const session = getOrCreateSession(callId, { market, language });
   recoverKnowledgeHandoff(session);
@@ -334,6 +334,39 @@ async function processVoiceTurn({ callId, query, market, language, recordUser = 
     role: 'assistant', content: answer, sources, abstention_reason: reason,
     response_kind: supportedAnswer ? 'grounded' : 'clarification', latency_ms: totalMs, ts: new Date().toISOString(),
   };
+  if (guidedMode && supportedAnswer) {
+    const documentNames = [...new Set(sources.map((source) => source.title || source.source).filter(Boolean))];
+    const result = getNudgeStore().create(callId, {
+      type: 'knowledge_tip',
+      text: documentNames.length
+        ? `Grounded reply ready from ${documentNames.join(', ')}. Review it before using it in the conversation.`
+        : 'A grounded reply is ready. Review it before using it in the conversation.',
+      priority: 'MEDIUM',
+      confidence: null,
+      suggested_response: answer,
+      context_query: query,
+      sources,
+      expires_after_seconds: 180,
+    });
+    session.state.confidence = null;
+    session.state.current_stage = 'awaiting_guidance';
+    recordLatency({ call_id: callId, rag_ms: ragMs, total_ms: totalMs });
+    emitLiveCallUpdate(session);
+    if (result.created) io.emit('nudge', result.nudge);
+    return {
+      ...ragResponse.data,
+      answer: null,
+      sources,
+      chunks: ragResponse.data.chunks || [],
+      abstention_reason: null,
+      response_kind: 'guided_suggestion',
+      suggestion: result.nudge,
+      call_id: callId,
+      latency_ms: totalMs,
+      session,
+      escalation: null,
+    };
+  }
   session.turns.push(assistantTurn);
   // Retrieval scores are similarity values, not calibrated confidence probabilities.
   session.state.confidence = null;
@@ -514,6 +547,9 @@ router.post('/query', async (req, res) => {
   if (!query || query.length > MAX_QUERY_LENGTH) {
     return res.status(400).json({ error: `query is required and must be under ${MAX_QUERY_LENGTH} characters` });
   }
+  if (req.body.guided_mode !== undefined && typeof req.body.guided_mode !== 'boolean') {
+    return res.status(400).json({ error: 'guided_mode must be a boolean' });
+  }
 
   const callId = typeof req.body.call_id === 'string' && req.body.call_id.trim()
     ? req.body.call_id.trim()
@@ -522,7 +558,7 @@ router.post('/query', async (req, res) => {
   const language = typeof req.body.language === 'string' ? req.body.language : (MARKET_LANGUAGES[market] || 'en-IN');
 
   try {
-    const result = await runVoiceTurn({ callId, query, market, language });
+    const result = await runVoiceTurn({ callId, query, market, language, guidedMode: req.body.guided_mode === true });
     return res.json(result);
   } catch (err) {
     const status = err.status || (err.code === 'ECONNABORTED' ? 504 : 503);
@@ -584,6 +620,55 @@ router.post('/session/:id/end', (req, res) => {
   const session = finishSession(req.params.id);
   closeInsightsCall(req.params.id).catch(() => {});
   return res.json({ status: 'ended', call_id: req.params.id, existed: Boolean(session) });
+});
+
+/**
+ * POST /api/voice/session/:id/nudges/:nudgeId/apply
+ * Commit a reviewed grounded tip as the next assistant turn. Replays return the
+ * original turn, while expired, dismissed, cross-call, and handoff-paused tips fail.
+ */
+router.post('/session/:id/nudges/:nudgeId/apply', (req, res) => {
+  const session = conversations.get(req.params.id);
+  if (!session || !isLive(session)) return res.status(404).json({ error: 'Active session not found' });
+  if (activeEscalation(session)) return res.status(409).json({ error: 'Resolve the human handoff before applying an automated tip' });
+  const store = getNudgeStore();
+  const current = store.get(req.params.nudgeId);
+  if (!current) return res.status(404).json({ error: 'Nudge not found' });
+  if (current.call_id !== session.call_id) return res.status(409).json({ error: 'Nudge does not belong to this call' });
+  const priorTurn = session.turns.find((turn) => turn.guided_by_nudge_id === current.id);
+  if (current.status === 'applied' && priorTurn) {
+    return res.json({ answer: priorTurn.content, sources: priorTurn.sources || [], turn: priorTurn, nudge: current, replayed: true });
+  }
+  if (current.status === 'applied') return res.status(409).json({ error: 'Applied nudge is missing its recorded turn' });
+
+  let appended = false;
+  let turn;
+  try {
+    const result = store.apply(current.id, req.session.userId, (nudge) => {
+      turn = {
+        role: 'assistant',
+        content: nudge.suggested_response,
+        sources: nudge.sources || [],
+        response_kind: 'guided',
+        guided_by_nudge_id: nudge.id,
+        ts: new Date().toISOString(),
+      };
+      session.turns.push(turn);
+      appended = true;
+      session.state.current_stage = 'answering';
+      session.last_activity = turn.ts;
+      callHistory().save(session);
+    });
+    io.emit('nudge:updated', { nudge: result.nudge });
+    emitTurn(session.call_id, turn);
+    feedToInsightsEngine(session.call_id, 'assistant', turn.content).catch((error) => {
+      logger.warn({ call_id: session.call_id, err: error.message }, 'Guided reply insights feed failed');
+    });
+    return res.json({ answer: turn.content, sources: turn.sources, turn, nudge: result.nudge, replayed: false });
+  } catch (error) {
+    if (appended && session.turns.at(-1) === turn) session.turns.pop();
+    throw error;
+  }
 });
 
 router.get('/history', (req, res) => {

@@ -59,3 +59,44 @@ test('malformed inputs and unknown IDs cannot create or mutate records', () => {
   assert.throws(() => store.act('missing', 'acknowledged', 'operator'), { status: 404 });
   assert.throws(() => store.act('missing', 'arbitrary', 'operator'), { status: 400 });
 });
+
+test('grounded knowledge tips apply once and retain their evidence', () => {
+  call('guided');
+  const { nudge } = store.create('guided', {
+    type: 'knowledge_tip',
+    text: 'A grounded loan reply is ready.',
+    priority: 'MEDIUM',
+    confidence: null,
+    suggested_response: 'The approved income requirement is in the loan policy.',
+    context_query: 'What income is required?',
+    sources: [{ source: 'loan-policy', chunk_id: 'income-1', page: 7 }],
+  });
+  let persisted = 0;
+  const first = store.apply(nudge.id, 'operator', () => { persisted += 1; });
+  assert.equal(first.applied, true);
+  assert.equal(first.nudge.status, 'applied');
+  assert.equal(first.nudge.sources[0].page, 7);
+  const replay = store.apply(nudge.id, 'operator', () => { persisted += 1; });
+  assert.equal(replay.applied, false);
+  assert.equal(persisted, 1);
+  assert.deepEqual(store.events(nudge.id).map((event) => event.action), ['created', 'applied']);
+  const ordinary = store.create('guided', payload).nudge;
+  assert.throws(() => store.apply(ordinary.id, 'operator', () => {}), { status: 409 });
+});
+
+test('new guidance replaces stale guidance without consuming safety-alert capacity', () => {
+  call('guidance-capacity');
+  for (let i = 0; i < 3; i++) {
+    store.create('guidance-capacity', { ...payload, text: `Safety ${i}`, priority: 'HIGH' });
+  }
+  const tip = (text) => ({
+    type: 'knowledge_tip', text, priority: 'MEDIUM', confidence: null,
+    suggested_response: text, sources: [],
+  });
+  store.create('guidance-capacity', tip('First grounded reply'));
+  store.create('guidance-capacity', tip('Current grounded reply'));
+  const records = store.list('guidance-capacity');
+  assert.equal(records.filter((nudge) => nudge.type !== 'knowledge_tip' && nudge.status === 'created').length, 3);
+  assert.equal(records.filter((nudge) => nudge.type === 'knowledge_tip' && nudge.status === 'created').length, 1);
+  assert.equal(records.find((nudge) => nudge.type === 'knowledge_tip' && nudge.status === 'created').text, 'Current grounded reply');
+});

@@ -18,6 +18,21 @@ completion. The record holds the latest assessment; event history retains every
 change with the authenticated user ID and timestamp. This is one workspace-wide
 assessment per nudge, not separate votes for each user.
 
+## Grounded Guidance Tips
+
+`knowledge_tip` is a separate operator-control path. When Voice Studio sends
+`guided_mode: true`, a supported RAG answer is retained with its source revisions,
+chunks, and PDF pages instead of being spoken immediately. The active states remain
+`created` and `displayed`; selecting **Use this reply** moves it to `applied`, appends
+exactly one attributed assistant turn, and emits that turn to live monitoring. Replaying
+the apply request returns the recorded turn rather than speaking or storing it twice.
+
+Only one knowledge tip is active for a call. A newer grounded suggestion replaces the
+older unselected one. This separate slot does not consume or evict the three safety-alert
+slots. Tips cannot be applied after expiry, dismissal, call completion, or while a human
+handoff is active. The browser may interrupt its current local speech to speak the newly
+applied tip, but the server never rewrites a previously recorded turn.
+
 ## Queue Rules
 
 - The gateway assigns a UUID and records call ID, signal type, text, priority,
@@ -25,7 +40,7 @@ assessment per nudge, not separate votes for each user.
 - Default lifetime is 45 seconds. Callback payloads may set 1-300 seconds.
 - Identical text and signal type for the same call are suppressed for 15 seconds,
   including if the previous alert was already dismissed or acknowledged.
-- At most three nudges are active for one call. An incoming alert replaces the
+- At most three signal alerts plus one knowledge tip are active for one call. An incoming alert replaces the
   oldest alert of the lowest priority, unless every active alert has higher
   priority. Lower-priority overflow returns 409 from the callback API; the voice
   integration skips it and continues processing the batch.
@@ -43,6 +58,7 @@ assessment per nudge, not separate votes for each user.
 | `GET /api/nudges?call_id=<id>` | Latest 100 nudges for a call; omit call ID for workspace-wide recent records |
 | `POST /api/nudges/:id/actions` | Body `{ "action": "acknowledged" }`, or another lifecycle/feedback action |
 | `GET /api/nudges/:id/events` | Ordered lifecycle and feedback history with actor and timestamp |
+| `POST /api/voice/session/:callId/nudges/:id/apply` | Apply one active grounded guidance tip |
 
 All three require the workspace's cookie session. Mutations also require an
 allowed Origin. The provider callback token cannot read or modify operator
@@ -55,8 +71,8 @@ must include `type` (or `signal_type`), `text`, `priority`, and `confidence`.
 Authenticated `nudge:dismiss` socket requests also save the action and emit
 `nudge:updated`. The HTTP action endpoint emits that same update event.
 
-SQLite schema version 2 adds `nudges` and `nudge_events`, retaining existing calls
-and authentication data. Nudge history remains after a call ends.
+`nudges` and `nudge_events` retain existing calls and authentication data. Nudge
+history remains after a call ends.
 
 ## Verification and Remaining Work
 

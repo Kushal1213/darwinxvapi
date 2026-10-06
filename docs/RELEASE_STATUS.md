@@ -14,6 +14,7 @@ because local tests pass.
 - Reviewed knowledge revisions, effective dates, scheduled publication, retryable jobs, and withdrawal fencing.
 - Durable internal handoff inbox with atomic creation, idempotency, acknowledgement, resolution, and audit events.
 - Knowledge-gap grouping and triage with privacy-minimized excerpts, recurrence counts, reopen behavior, and published-revision validation.
+- Operator-guided grounded replies that pause, preview, apply, render, and speak with citation and actor attribution.
 - Maintained Google Gen AI SDK adapter and provider-free contract/grounding tests.
 - Zero advisories in the npm production dependency graph on the review date.
 
