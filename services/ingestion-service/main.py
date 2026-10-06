@@ -14,13 +14,13 @@ import hashlib
 import logging
 import sys
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
-from datetime import datetime
+from datetime import date, datetime
 
 import numpy as np
 import faiss
-import google.generativeai as genai
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -34,6 +34,7 @@ import requests as req_lib
 BASE_DIR = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(BASE_DIR / 'services'))
 from managed_knowledge import discard_staged_document, publish_staged_document, read_snapshot, replace_document, stage_document
+from gemini_provider import GeminiProvider
 load_dotenv(os.getenv('VEYRA_ENV_FILE') or BASE_DIR / '.env')
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -64,20 +65,17 @@ RAW_DIR.mkdir(parents=True, exist_ok=True)
 # ── Global State ─────────────────────────────────────────────
 faiss_index: Optional[faiss.IndexFlatIP] = None
 chunk_store: list[dict] = []
-
-app = FastAPI(title="Veyra Ingestion Service", version="1.0.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+gemini = GeminiProvider()
 
 
-# ── Startup ────────────────────────────────────────────────────
-@app.on_event("startup")
-async def startup():
+@asynccontextmanager
+async def lifespan(_app):
     global faiss_index, chunk_store
 
     if not GEMINI_API_KEY:
         logger.warning("⚠️  GEMINI_API_KEY not set — embeddings will fail")
     else:
-        genai.configure(api_key=GEMINI_API_KEY)
+        gemini.configure(GEMINI_API_KEY)
         logger.info(f"✅ Gemini configured — embedding model: {EMBEDDING_MODEL}")
 
     if INDEX_FILE.exists() and METADATA_FILE.exists():
@@ -93,6 +91,14 @@ async def startup():
     else:
         faiss_index = faiss.IndexFlatIP(EMBEDDING_DIM)
         logger.info(f"✅ New FAISS index created (dim={EMBEDDING_DIM})")
+    try:
+        yield
+    finally:
+        gemini.close()
+
+
+app = FastAPI(title="Veyra Ingestion Service", version="1.0.0", lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
 # ── Pydantic Models ────────────────────────────────────────────
@@ -108,6 +114,8 @@ class URLIngestionRequest(BaseModel):
     category: str = "general"
     title: Optional[str] = None
     market: str = "india"
+    product: Optional[str] = None
+    agent_eligible: bool = True
 
 
 # ── Routes ────────────────────────────────────────────────────
@@ -129,6 +137,8 @@ async def ingest_pdf(
     file: UploadFile = File(...),
     category: str = "policy",
     market: str = "india",
+    product: Optional[str] = None,
+    agent_eligible: bool = True,
 ):
     if not file.filename.endswith(".pdf"):
         raise HTTPException(400, "Only PDF files accepted")
@@ -146,6 +156,8 @@ async def ingest_pdf(
         raise HTTPException(422, "Could not extract text from PDF")
 
     chunks = chunk_text(text, source=file.filename, category=category, market=market)
+    for chunk in chunks:
+        chunk.update(product=product, agent_eligible=agent_eligible)
     added = await embed_and_index(chunks)
     save_index()
 
@@ -176,6 +188,8 @@ async def ingest_url(body: URLIngestionRequest):
 
     chunks = chunk_text(text, source=body.url, category=body.category,
                         market=body.market, title=body.title or body.url)
+    for chunk in chunks:
+        chunk.update(product=body.product, agent_eligible=body.agent_eligible)
     added = await embed_and_index(chunks)
     save_index()
 
@@ -192,6 +206,8 @@ class TextIngestionRequest(BaseModel):
     title: Optional[str] = None
     category: str = "general"
     market: str = "india"
+    product: Optional[str] = None
+    agent_eligible: bool = True
 
 
 @app.post("/ingest/text", response_model=IngestionStatus)
@@ -210,6 +226,8 @@ async def ingest_text(body: TextIngestionRequest):
         market=body.market,
         title=body.title or body.filename,
     )
+    for chunk in chunks:
+        chunk.update(product=body.product, agent_eligible=body.agent_eligible)
     added = await embed_and_index(chunks)
     save_index()
 
@@ -247,16 +265,21 @@ def reset_index():
 
 # ── Text Extraction ────────────────────────────────────────────
 
-def extract_pdf_text(content: bytes) -> str:
-    parts = []
+def extract_pdf_pages(content: bytes) -> list[tuple[int, str]]:
+    """Return non-empty PDF pages with stable, one-based page numbers."""
+    pages = []
     import io
     pdf_file = io.BytesIO(content)
     reader = PdfReader(pdf_file)
     for i, page in enumerate(reader.pages):
         text = page.extract_text()
         if text and text.strip():
-            parts.append(f"[PAGE {i+1}]\n\n{text}")
-    return "\n".join(parts)
+            pages.append((i + 1, text.strip()))
+    return pages
+
+
+def extract_pdf_text(content: bytes) -> str:
+    return "\n\n".join(f"[PAGE {page}]\n\n{text}" for page, text in extract_pdf_pages(content))
 
 
 def extract_html_text(html: str) -> str:
@@ -335,6 +358,20 @@ def _build_chunk(content, source, category, market, title, page, idx) -> dict:
     }
 
 
+def managed_chunks(segments: list[tuple[Optional[int], str]], source: str, category: str,
+                   market: str, title: str) -> list[dict]:
+    """Chunk managed content without allowing a PDF citation to cross pages."""
+    chunks = []
+    step = CHUNK_SIZE_CHARS - CHUNK_OVERLAP_CHARS
+    for page, text in segments:
+        cleaned = text.strip()
+        for offset in range(0, len(cleaned), step):
+            part = cleaned[offset:offset + CHUNK_SIZE_CHARS].strip()
+            if part:
+                chunks.append(_build_chunk(part, source, category, market, title, page, len(chunks)))
+    return chunks
+
+
 def _detect_pii(text: str) -> bool:
     patterns = [
         r"\b\d{10}\b",
@@ -357,7 +394,7 @@ async def embed_and_index(chunks: list[dict]) -> int:
         batch = chunks[i: i + EMBED_BATCH_SIZE]
         texts = [c["content"] for c in batch]
         try:
-            result = genai.embed_content(
+            result = gemini.embed_content(
                 model=EMBEDDING_MODEL,
                 content=texts,
                 task_type="retrieval_document",
@@ -393,7 +430,16 @@ async def index_document(document_id: uuid.UUID, file: UploadFile = File(...),
                          title: str = Form(...), market: str = Form('india'),
                          category: str = Form('general'), family_id: Optional[uuid.UUID] = Form(None),
                          revision: int = Form(1, ge=1), content_hash: str = Form(''),
-                         product: Optional[str] = Form(None, min_length=1, max_length=100)):
+                         product: Optional[str] = Form(None, min_length=1, max_length=100),
+                         effective_from: Optional[str] = Form(None, pattern=r'^\d{4}-\d{2}-\d{2}$'),
+                         effective_to: Optional[str] = Form(None, pattern=r'^\d{4}-\d{2}-\d{2}$')):
+    try:
+        start_date = date.fromisoformat(effective_from) if effective_from else None
+        end_date = date.fromisoformat(effective_to) if effective_to else None
+    except ValueError as exc:
+        raise HTTPException(422, 'Effective dates must be valid ISO dates') from exc
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(422, 'Effective end date must be on or after the start date')
     content = await file.read(5 * 1024 * 1024 + 1)
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(413, 'Maximum document size is 5 MB')
@@ -407,6 +453,7 @@ async def index_document(document_id: uuid.UUID, file: UploadFile = File(...),
         cached = json.loads(cached_path.read_text(encoding='utf-8'))
         identity = {'content_hash': actual_hash, 'title': title, 'market': market,
                     'category': category, 'product': product, 'revision': revision, 'family_id': str(family_id or document_id),
+                    'effective_from': effective_from, 'effective_to': effective_to,
                     'source': Path((file.filename or '').replace('\\', '/')).name}
         if cached and all(all(c.get(key) == value for key, value in identity.items()) for c in cached):
             vectors = np.load(cached_vectors, allow_pickle=False)
@@ -420,32 +467,31 @@ async def index_document(document_id: uuid.UUID, file: UploadFile = File(...),
     extension = Path(filename).suffix.lower()
     try:
         if extension == '.pdf':
-            text = extract_pdf_text(content)
+            segments = [(page, text) for page, text in extract_pdf_pages(content)]
         elif extension in ('.txt', '.md'):
-            text = content.decode('utf-8-sig')
+            segments = [(None, content.decode('utf-8-sig'))]
         else:
             raise HTTPException(400, 'Use PDF, TXT, or Markdown files')
     except HTTPException:
         raise
     except Exception:
         raise HTTPException(422, 'The PDF could not be read; scanned PDFs need OCR' if extension == '.pdf' else 'Text and Markdown files must use UTF-8 encoding')
-    if not text.strip():
+    if not any(text.strip() for _, text in segments):
         raise HTTPException(422, 'No extractable text; scanned PDFs need OCR')
-    # Keep short policy lines and split long paragraphs into bounded overlapping chunks.
-    text = re.sub(r'\[PAGE \d+\]\s*', '', text).strip()
-    chunks = []
-    for offset in range(0, len(text), CHUNK_SIZE_CHARS - CHUNK_OVERLAP_CHARS):
-        part = text[offset:offset + CHUNK_SIZE_CHARS].strip()
-        if part:
-            chunk = _build_chunk(part, filename, category, market, title, None, len(chunks))
-            chunk['document_id'] = str(document_id)
-            chunk['family_id'] = str(family_id or document_id)
-            chunk['revision'] = revision
-            chunk['content_hash'] = actual_hash
-            if product:
-                chunk['product'] = product
-            chunk['chunk_id'] = f'{document_id}:{len(chunks)}'
-            chunks.append(chunk)
+    # Keep short policy lines and split long pages into bounded overlapping chunks.
+    chunks = managed_chunks(segments, filename, category, market, title)
+    for index, chunk in enumerate(chunks):
+        chunk['document_id'] = str(document_id)
+        chunk['family_id'] = str(family_id or document_id)
+        chunk['revision'] = revision
+        chunk['content_hash'] = actual_hash
+        if product:
+            chunk['product'] = product
+        if effective_from:
+            chunk['effective_from'] = effective_from
+        if effective_to:
+            chunk['effective_to'] = effective_to
+        chunk['chunk_id'] = f'{document_id}:{index}'
     if not chunks or len(chunks) > 500:
         raise HTTPException(422, 'Document must contain text and produce at most 500 chunks')
     if not GEMINI_API_KEY:
@@ -453,7 +499,7 @@ async def index_document(document_id: uuid.UUID, file: UploadFile = File(...),
     embeddings = []
     try:
         for offset in range(0, len(chunks), EMBED_BATCH_SIZE):
-            result = genai.embed_content(model=EMBEDDING_MODEL,
+            result = gemini.embed_content(model=EMBEDDING_MODEL,
                 content=[c['content'] for c in chunks[offset:offset + EMBED_BATCH_SIZE]], task_type='retrieval_document')
             embeddings.extend(result['embedding'])
         stage_document(INDEX_DIR, str(document_id), chunks, embeddings)

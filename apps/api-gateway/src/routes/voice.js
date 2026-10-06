@@ -4,6 +4,8 @@ import axios from 'axios';
 import { io, logger } from '../index.js';
 import { createCallHistory } from '../services/call-history.js';
 import { getNudgeStore } from '../services/nudges.js';
+import { persistHandoffEscalation } from '../services/handoff-deliveries.js';
+import { recordKnowledgeGap } from '../services/knowledge-gaps.js';
 
 const router = express.Router();
 
@@ -29,7 +31,7 @@ function finishSession(callId) {
     status: 'completed',
     ended_at: new Date().toISOString(),
     summary: buildSummary(session),
-    outcome: session.escalations.length ? 'human_handoff_requested' : 'completed',
+    outcome: activeEscalation(session) ? 'human_handoff_requested' : 'completed',
   };
   callHistory().save(finished);
   session.status = finished.status;
@@ -153,8 +155,8 @@ function buildLiveCall(session) {
   };
 }
 
-function emitLiveCallUpdate(session) {
-  callHistory().save(session);
+function emitLiveCallUpdate(session, persist = true) {
+  if (persist) callHistory().save(session);
   io.emit('insights:call:update', { call: buildLiveCall(session) });
 }
 
@@ -188,6 +190,7 @@ function updateConversationState(session, text) {
 }
 
 function escalationFor(session, text) {
+  if (/\b(?:do not|don't|dont|no need to)\s+(?:want|need|speak to|talk to|transfer to)?\s*(?:a |an )?(?:human|manager|supervisor|representative)\b/i.test(text)) return null;
   if (!/\b(manager|supervisor|human|representative|escalat\w*|complaint|claim rejected)\b/i.test(text)) {
     return null;
   }
@@ -195,11 +198,15 @@ function escalationFor(session, text) {
 }
 
 function requestEscalation(session, reason) {
-  if (session.escalations.length) return session.escalations.at(-1);
+  if (activeEscalation(session)) {
+    persistHandoffEscalation(session, activeEscalation(session));
+    return activeEscalation(session);
+  }
   const escalation = {
     escalation_id: uuidv4(),
     call_id: session.call_id,
     reason,
+    trigger: 'human_request',
     customer_intent: session.state.intent,
     last_customer_message: getLatestTurn(session, 'user'),
     sources: session.turns.filter((turn) => turn.role === 'assistant').at(-1)?.sources || [],
@@ -212,9 +219,39 @@ function requestEscalation(session, reason) {
   session.status = 'escalated';
   session.state.current_stage = 'escalation';
   session.escalations.push(escalation);
-  io.emit('call:escalated', escalation);
-  emitLiveCallUpdate(session);
+  const delivery = persistHandoffEscalation(session, escalation);
+  io.emit('call:escalated', { ...escalation, delivery });
+  io.emit('handoff:updated', { handoff: delivery });
+  emitLiveCallUpdate(session, false);
   return escalation;
+}
+
+function activeEscalation(session) {
+  return session.escalations.findLast((item) => !item.resolved_at);
+}
+
+function recoverKnowledgeHandoff(session) {
+  // Old releases treated missing evidence as a terminal handoff. Preserve that
+  // audit record, but allow these specific automatic failures to retry.
+  const reasons = new Set(['no_eligible_candidates', 'insufficient_support', 'knowledge_empty',
+    'out_of_scope', 'No supporting knowledge was retrieved']);
+  for (const item of session.escalations) {
+    if (!item.trigger && !item.resolved_at && reasons.has(item.reason)) {
+      item.resolved_at = new Date().toISOString();
+      item.resolution = 'Knowledge lookup can be retried; no human handoff was requested.';
+    }
+  }
+  if (session.status === 'escalated' && !activeEscalation(session)) session.status = 'active';
+}
+
+function conversationalReply(query, market) {
+  const text = query.toLowerCase().replace(/[.!?,]/g, '').trim();
+  if (/^(hi|hello|hey|good morning|good afternoon|good evening|halo|hai|selamat pagi|selamat siang|kumusta|magandang umaga)$/.test(text)) {
+    return `Hello! I can help with ${MARKET_DETAILS[market].label.toLowerCase()}. What would you like to know?`;
+  }
+  if (/^(thanks|thank you|thank you very much|terima kasih|salamat)( so much)?$/.test(text)) return 'You’re welcome. What else would you like to know?';
+  if (/^(help|what can you do|how can you help|who are you)$/.test(text)) return `I’m the Veyra assistant for ${MARKET_DETAILS[market].label.toLowerCase()}. Ask about requirements, documents, or product details. I’ll use the available knowledge and say when I can’t support an answer.`;
+  return null;
 }
 
 async function runVoiceTurn(options) {
@@ -232,6 +269,7 @@ async function runVoiceTurn(options) {
 async function processVoiceTurn({ callId, query, market, language, recordUser = true, emitUser = true }) {
   const startedAt = Date.now();
   const session = getOrCreateSession(callId, { market, language });
+  recoverKnowledgeHandoff(session);
   const userTurn = { role: 'user', content: query, ts: new Date().toISOString() };
 
   if (recordUser) {
@@ -240,7 +278,13 @@ async function processVoiceTurn({ callId, query, market, language, recordUser = 
   }
   if (emitUser) emitTurn(callId, userTurn);
 
-  const handoff = session.escalations.at(-1) || escalationFor(session, query);
+  // Every customer turn must reach the live detector, including greetings and
+  // requests that take the immediate human-handoff path below.
+  feedToInsightsEngine(callId, 'customer', query).catch((err) => {
+    logger.warn({ callId, err: err.message }, 'Live insights feed failed');
+  });
+
+  const handoff = activeEscalation(session) || escalationFor(session, query);
   if (handoff) {
     session.state.current_stage = 'escalation';
     const answer = 'Your request for human assistance has been recorded. A team member will need to take over this conversation.';
@@ -250,11 +294,14 @@ async function processVoiceTurn({ callId, query, market, language, recordUser = 
     return { call_id: callId, answer, sources: [], session, escalation: handoff, latency_ms: Date.now() - startedAt };
   }
 
-  // Analysis is intentionally non-blocking. A temporary insights outage must
-  // never prevent the customer from receiving a grounded answer.
-  feedToInsightsEngine(callId, 'customer', query).catch((err) => {
-    logger.warn({ callId, err: err.message }, 'Live insights feed failed');
-  });
+  const greeting = conversationalReply(query, session.market);
+  if (greeting) {
+    session.state.current_stage = 'intent_capture';
+    const turn = { role: 'assistant', content: greeting, sources: [], response_kind: 'conversation', ts: new Date().toISOString() };
+    session.turns.push(turn);
+    emitTurn(callId, turn);
+    return { call_id: callId, answer: greeting, sources: [], response_kind: 'conversation', session, escalation: null, latency_ms: Date.now() - startedAt };
+  }
 
   const ragScope = scopeForMarket(session.market);
   const ragStartedAt = Date.now();
@@ -266,21 +313,32 @@ async function processVoiceTurn({ callId, query, market, language, recordUser = 
   const ragMs = Date.now() - ragStartedAt;
   if (!isLive(session)) throw Object.assign(new Error('This call has ended.'), { status: 409 });
   const totalMs = Date.now() - startedAt;
-  const sources = ragResponse.data.sources || [];
-  const supportedAnswer = sources.length && !ragResponse.data.abstention_reason;
-  const answer = supportedAnswer && ragResponse.data.answer
+  const supportedAnswer = Boolean(ragResponse.data.sources?.length && !ragResponse.data.abstention_reason && ragResponse.data.answer);
+  const sources = supportedAnswer ? ragResponse.data.sources : [];
+  const reason = supportedAnswer ? null : (ragResponse.data.abstention_reason || 'insufficient_support');
+  const answer = supportedAnswer
     ? ragResponse.data.answer
-    : 'I could not find supporting knowledge for that question. A request for human assistance has been recorded.';
+    : reason === 'knowledge_empty'
+      ? 'No usable knowledge is available for this agent yet. An administrator needs to add and publish a document for this product. You can ask for human assistance.'
+      : 'I could not find supporting knowledge for that question. Please name the product or rephrase your question. You can also ask to speak with a human.';
+  if (!supportedAnswer) {
+    recordKnowledgeGap({
+      callId,
+      market: ragScope.market,
+      product: ragScope.product,
+      reason,
+      question: query,
+    });
+  }
   const assistantTurn = {
-    role: 'assistant', content: answer, sources, latency_ms: totalMs, ts: new Date().toISOString(),
+    role: 'assistant', content: answer, sources, abstention_reason: reason,
+    response_kind: supportedAnswer ? 'grounded' : 'clarification', latency_ms: totalMs, ts: new Date().toISOString(),
   };
   session.turns.push(assistantTurn);
   // Retrieval scores are similarity values, not calibrated confidence probabilities.
   session.state.confidence = null;
-  const escalation = session.escalations.at(-1) || (!supportedAnswer
-    ? requestEscalation(session, ragResponse.data.abstention_reason || 'No supporting knowledge was retrieved')
-    : null);
-  if (!escalation) session.state.current_stage = 'answering';
+  const escalation = activeEscalation(session) || null;
+  session.state.current_stage = escalation ? 'escalation' : supportedAnswer ? 'answering' : 'needs_clarification';
 
   recordLatency({ call_id: callId, rag_ms: ragMs, total_ms: totalMs });
   emitTurn(callId, assistantTurn);
@@ -291,6 +349,10 @@ async function processVoiceTurn({ callId, query, market, language, recordUser = 
   return {
     ...ragResponse.data,
     answer,
+    sources,
+    chunks: supportedAnswer ? (ragResponse.data.chunks || []) : [],
+    abstention_reason: reason,
+    response_kind: assistantTurn.response_kind,
     call_id: callId,
     latency_ms: totalMs,
     session,

@@ -214,8 +214,9 @@ export default function CallHistoryPage({ selectedId = null, onSelectCall }) {
               key={escalation.escalation_id}
               className="notice notice-warning"
             >
-              <h2 className="font-semibold">Human handoff requested</h2>
+              <h2 className="font-semibold">{escalation.resolved_at ? 'Previous automatic handoff resolved' : 'Human handoff requested'}</h2>
               <p className="mt-2">{escalation.reason}</p>
+              {escalation.resolved_at && <p className="mt-2">{escalation.resolution}</p>}
               <p className="text-xs mt-2">
                 Priority: {escalation.priority} · Transfer is not confirmed by
                 this record.
@@ -266,6 +267,7 @@ export default function CallHistoryPage({ selectedId = null, onSelectCall }) {
                               Document {source.document_id}
                             </p>
                           )}
+                          {source.page && <p>PDF page {source.page}</p>}
                           {source.chunk_id && (
                             <p className="text-[10px] font-mono break-all">
                               {source.chunk_id}

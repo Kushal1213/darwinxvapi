@@ -10,7 +10,8 @@ uploads and cannot be archived through this UI.
 
 ## Workflow
 
-- Upload a PDF, UTF-8 TXT, or Markdown file (maximum 5 MB and 500 extracted chunks).
+- Upload a PDF, UTF-8 TXT, or Markdown file (maximum 5 MB and 500 extracted chunks),
+  with optional `effectiveFrom` and `effectiveTo` dates.
 - The gateway retains the original bytes and metadata in SQLite, returning HTTP 202.
 - Processing follows uploaded -> processing -> ready or failed. Ready revisions await
   a different administrator's approval before publication. Rejection requires a reason.
@@ -19,7 +20,9 @@ uploads and cannot be archived through this UI.
 - Review shows retained chunks, prior-revision comparison, revision history, rejection
   reasons, content hash, and upload/approval attribution. Unpublished and historical
   chunk previews require administrator access.
-- Approval saves a publication job and returns HTTP 202. Its worker atomically replaces that document family's chunks in the active snapshot.
+- Approval saves a publication job and returns HTTP 202. A future `effectiveFrom`
+  schedules that job for 00:00 UTC on the selected date, leaving the current live
+  revision in place until then. Its worker atomically replaces that document family's chunks in the active snapshot.
   The prior published revision becomes superseded; its content and approval remain retained.
 - Retry of the latest failed revision uses the same ID and original file. Restoring
   the latest archived revision creates a new ID and review request, with the restorer
@@ -36,7 +39,7 @@ Endpoints under authenticated /api/knowledge/documents:
 | Method | Suffix | Result |
 | --- | --- | --- |
 | GET | / | All revision metadata, status, errors, latest flag, and active revision ID/number |
-| POST | / | Multipart file, title, market, category, product; returns 202 |
+| POST | / | Multipart file, title, market, category, product, optional effectiveFrom/effectiveTo; returns 202 |
 | GET | /:id | Metadata and retained chunks; only published content is operator-readable |
 | GET | /:id/revisions | Revision history for the document family, newest first |
 | POST | /:id/revisions | Replacement multipart upload based on the latest resolved revision; returns 202 |
@@ -54,9 +57,15 @@ list API. Markets are india, philippines, and indonesia.
 
 Each revision has an immutable UUID (`id`), root `familyId`, monotonically increasing
 `revision`, `previousRevisionId`, SHA-256 of the original bytes (`contentHash`), and
-author. Content, title, market, product, and category changes require a new revision. Pending
+author. Content, title, market, product, category, and effective-window changes require a new revision. Pending
 review must be resolved before creating another revision. State transitions update
 the same revision's lifecycle metadata; they do not edit its content.
+
+Effective dates are calendar dates interpreted as inclusive UTC days. `effectiveFrom`
+must not be later than `effectiveTo`. Approval rejects a revision whose window has
+already ended. A future-approved revision reports `scheduled`; an ended published
+revision reports `expired`. Documents without either date retain the prior undated
+behavior for backward compatibility.
 
 Existing gateway records without revision fields are interpreted as standalone v1
 documents. Their original approval state is preserved, never upgraded. Old records
@@ -72,10 +81,16 @@ aliases forward it. Agent market aliases imply their product scope and conflicti
 explicit product choices are rejected.
 
 Managed citations include `document_id` (the revision UUID), `family_id`, `revision`,
-`content_hash`, and revision-scoped `chunk_id`. These fields pass through to persisted
+`content_hash`, `effective_from`, `effective_to`, and revision-scoped `chunk_id`. These fields pass through to persisted
 call turns; Call History displays the revision number. Existing call citations remain
 unchanged. Creation, rejection, publication, and withdrawal emit actor-attributed
 workspace events; rejection reasons also remain in the revision record.
+
+New PDF revisions are extracted page by page. Their chunks never cross a physical PDF
+page boundary and carry the one-based `page` used by retrieval citations, Voice Studio,
+Call History, and the reviewer preview. Blank pages create no chunks but do not renumber
+later pages. TXT and Markdown citations have no page number. Previously indexed revisions
+are not rewritten; upload a new revision to add page metadata to older PDF knowledge.
 
 ## Index Publication
 
@@ -89,6 +104,10 @@ managed/current.json pointer. Readers use immutable snapshots. Each retrieval
 checks the pointer and combines legacy and managed chunks when it changes.
 Invalid new snapshots fail closed with HTTP 503, not stale archived content.
 Requests already in progress may finish against the snapshot they captured.
+Retrieval independently checks every managed chunk's effective window against the
+current UTC date. Future, expired, or malformed dated chunks are ineligible in both
+vector and lexical paths. Expired chunks can remain in an immutable snapshot for
+audit/recovery, but cannot support a new answer.
 
 The private `managed/revisions/<id>.json` evidence files preserve processed content
 after replacement or withdrawal. Staged vectors remain available after publication
@@ -134,6 +153,23 @@ approval, and withdrawal requests are attributed in workspace events. Legacy int
 uploads with a known author are adopted into the queue; uploads without an author fail
 with an explanation instead of preventing gateway startup.
 
+## Knowledge-Gap Inbox
+
+The gateway records explicit `no_eligible_candidates`, `insufficient_support`,
+`knowledge_empty`, and `conflicting_evidence` abstentions. Greetings, malformed
+inputs, and explicit human requests are excluded. A SHA-256 fingerprint groups the
+normalized question within its workspace, market, and product. Stored excerpts replace
+email addresses and long digit sequences; only the ten most recent distinct example
+call IDs are retained in the record.
+
+`GET /api/knowledge/gaps` supports status filtering and pagination for authenticated
+members. Admins can post state changes to `/api/knowledge/gaps/:id/actions` using
+`open`, `triaged`, `planned`, `out_of_scope`, `resolved`, or `reopened`. Closing an
+out-of-scope gap requires a note. Resolving a gap requires both a note and an active
+published document revision. A repeated abstention reopens a resolved or out-of-scope
+gap and appends an immutable event. Automatic regression execution and retention/deletion
+policy remain release prerequisites.
+
 ## Limits Before Production
 
 - The worker shares the gateway process; separate supervision, distributed leases,
@@ -142,13 +178,14 @@ with an explanation instead of preventing gateway startup.
 - The embedding provider is required for indexing. Tests use fake vectors, not
   paid provider calls. Provider limits and real-model retrieval quality need pilot tests.
 - PII detection is a heuristic signal, not masking, redaction, or a compliance guarantee.
-- Scanned PDFs need OCR, which is not implemented. Text extraction does not preserve
-  page citations in the managed chunker.
+- Scanned PDFs need OCR, which is not implemented. Page citations identify the physical
+  PDF page reported by text extraction, not a printed page label inside the document.
 - Original uploads and old generations remain on disk. Retention, secure deletion,
   encryption, malware scanning, snapshot garbage collection, and backup policy remain open.
 - Snapshot publication is atomic visibility, not a cross-system SQLite/FAISS transaction.
-- Automatic effective dates, rollback selection, retained-generation quotas, and snapshot
-  cleanup are not implemented. A terminal failed job requires an administrator's retry
+- Automatic rollback selection, retained-generation quotas, and snapshot cleanup are
+  not implemented. Effective windows require administrator-supplied dates; there is no
+  locale-specific timezone or time-of-day scheduling. A terminal failed job requires an administrator's retry
   after resolving its cause. Restart recovery assumes exactly one gateway owns the queue.
 - Dedicated stacks provide the supported tenant boundary; shared-process tenancy is
   not supported. Legacy sources need an explicit review and migration.
@@ -176,9 +213,10 @@ administrator to review it. Upload a replacement, compare revisions, reject with
 reason, resubmit, and approve. Confirm the prior version remains live until approval
 and retrieval then cites the replacement. It does not configure the real workspace owner.
 
-Verified locally: 29 gateway tests, 12 Python tests, frontend build, and a browser
-workflow covering upload, rejection, resubmission, publication, revision history,
-and retrieval citations on desktop/mobile. Embeddings were deterministic fixtures.
+Verified locally on 2026-10-06: 31 gateway tests, 19 Python tests, 2 tenant-stack
+tests, the seven-case grounding gate, provider inventory, and the frontend production
+build. Earlier browser workflows covered upload, rejection, resubmission, publication,
+revision history, and retrieval citations on desktop/mobile. Embeddings were deterministic fixtures.
 Short substantive terms such as age and fee now participate in whole-word matching.
 Regression coverage includes longer age questions, wrong-product and unclassified
 exclusion in vector/lexical paths, and an explicit empty-knowledge abstention.

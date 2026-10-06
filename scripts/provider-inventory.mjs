@@ -97,15 +97,16 @@ export function buildInventory(options = {}) {
   const audit = options.includeAudit ? maybeRunNpmAudit() : null;
 
   const pythonByName = Object.fromEntries(requirements.map((item) => [item.name.toLowerCase(), item]));
-  const googleGenerativeAi = pythonByName['google-generativeai'];
+  const googleGenAi = pythonByName['google-genai'];
+  const legacyGoogleGenerativeAi = pythonByName['google-generativeai'];
 
   const findings = [];
-  if (googleGenerativeAi) {
+  if (legacyGoogleGenerativeAi || !googleGenAi) {
     findings.push({
       id: 'google-generativeai-review-required',
       severity: 'high',
       area: 'provider-sdk',
-      summary: 'Gemini calls use google-generativeai; migration to the maintained Google Gen AI SDK is still pending.',
+      summary: 'The maintained google-genai dependency or adapter is missing; provider SDK remediation is required.',
       evidence: ['services/requirements.txt', 'services/rag-service/main.py', 'services/ingestion-service/main.py'],
     });
   }
@@ -139,7 +140,7 @@ export function buildInventory(options = {}) {
       {
         name: 'Gemini API',
         purpose: ['retrieval embeddings', 'optional answer generation'],
-        sdk: googleGenerativeAi ? { package: googleGenerativeAi.name, specifier: googleGenerativeAi.specifier, pinned: googleGenerativeAi.pinned } : null,
+        sdk: googleGenAi ? { package: googleGenAi.name, specifier: googleGenAi.specifier, pinned: googleGenAi.pinned } : null,
         environment: ['GEMINI_API_KEY', 'GEMINI_MODEL'],
         configured_defaults: {
           rag_model: sourceDefault(ragSource, /GEMINI_MODEL\s*=\s*os\.getenv\("GEMINI_MODEL",\s*"([^"]+)"/),

@@ -42,5 +42,18 @@
     "publication_status": "unpublished",
     "review_status": "draft",
     "content": "Draft-only zircon loan fee is 99 rupees. This content must never be used for customer answers."
+  },
+  {
+    "document_id": "fixture-expired-loan",
+    "chunk_id": "fixture-expired-loan:fee",
+    "source": "fixture-expired-loan-policy",
+    "title": "Fixture Expired Loan Policy",
+    "market": "india",
+    "product": "personal-loan",
+    "publication_status": "published",
+    "review_status": "approved",
+    "effective_from": "2020-01-01",
+    "effective_to": "2020-12-31",
+    "content": "Expired-only cobalt loan fee is 77 rupees. This content must never be used after its effective window."
   }
 ]

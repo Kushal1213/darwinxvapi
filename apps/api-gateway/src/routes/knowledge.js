@@ -7,24 +7,40 @@ import { getDatabase } from '../services/database.js';
 import { enqueueKnowledgeJob, familyHasJob, knowledgeJobs, pendingKnowledgeJobs, startJobWorker, transaction } from '../services/knowledge-jobs.js';
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 4 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 6 } });
+const dateOnly = z.preprocess(value => value === '' ? undefined : value,
+  z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
+    const parsed = new Date(value + 'T00:00:00.000Z');
+    return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
+  }).optional());
 const metadata = z.object({
   title: z.string().trim().min(1).max(180),
   market: z.enum(['india', 'philippines', 'indonesia']),
   category: z.string().trim().min(1).max(80),
   product: z.string().trim().min(1).max(100).optional(),
-});
+  effectiveFrom: dateOnly,
+  effectiveTo: dateOnly,
+}).refine(value => !value.effectiveFrom || !value.effectiveTo || value.effectiveFrom <= value.effectiveTo,
+  { message: 'Effective end date must be on or after the start date.', path: ['effectiveTo'] });
 const database = getDatabase;
+const utcToday = (now = new Date()) => now.toISOString().slice(0, 10);
+export function effectiveWindowStatus(doc, today = utcToday()) {
+  if (doc.effectiveTo && doc.effectiveTo < today) return 'expired';
+  if (doc.effectiveFrom && doc.effectiveFrom > today) return 'scheduled';
+  return doc.effectiveFrom || doc.effectiveTo ? 'active' : 'undated';
+}
 function save(doc, db = getDatabase()) {
   doc.updatedAt = new Date().toISOString();
-  db.prepare('UPDATE knowledge_documents SET payload = ? WHERE id = ?').run(JSON.stringify(doc), doc.id);
+  const { effectiveStatus: _derived, ...stored } = doc;
+  db.prepare('UPDATE knowledge_documents SET payload = ? WHERE id = ?').run(JSON.stringify(stored), doc.id);
 }
 function get(id) {
   const row = database().prepare("SELECT * FROM knowledge_documents WHERE id = ? AND workspace_id = 'default'").get(id);
   return row && { ...row, document: versioned(JSON.parse(row.payload)) };
 }
 function versioned(doc) {
-  return { ...doc, familyId: doc.familyId || doc.id, revision: doc.revision || 1 };
+  return { ...doc, familyId: doc.familyId || doc.id, revision: doc.revision || 1,
+    effectiveStatus: effectiveWindowStatus(doc) };
 }
 function documents() {
   return database().prepare("SELECT payload FROM knowledge_documents WHERE workspace_id = 'default' ORDER BY rowid DESC").all().map(row => versioned(JSON.parse(row.payload)));
@@ -88,6 +104,7 @@ export function startKnowledgeWorker(onError) {
         if (doc.reviewStatus !== 'approved' || doc.approvalId !== job.approval_id || doc.publicationStatus !== 'publishing' || history(doc)[0].id !== doc.id) {
           throw Object.assign(new Error('Publication approval is no longer valid.'), { permanent: true });
         }
+        if (effectiveWindowStatus(doc) === 'expired') return { expired: true };
         return ingestion('/documents/' + doc.id + '/publish?operation_id=' + job.id, { method: 'POST' });
       }
       if (job.kind === 'withdraw') return ingestion('/documents/' + doc.id + '?operation_id=' + job.id + '&family_id=' + doc.familyId, { method: 'DELETE' });
@@ -97,6 +114,8 @@ export function startKnowledgeWorker(onError) {
       form.append('file', new Blob([row.content]), row.filename);
       for (const key of ['title', 'market', 'category']) form.append(key, doc[key]);
       if (doc.product) form.append('product', doc.product);
+      if (doc.effectiveFrom) form.append('effective_from', doc.effectiveFrom);
+      if (doc.effectiveTo) form.append('effective_to', doc.effectiveTo);
       form.append('family_id', doc.familyId);
       form.append('revision', String(doc.revision));
       form.append('content_hash', doc.contentHash || createHash('sha256').update(row.content).digest('hex'));
@@ -106,6 +125,11 @@ export function startKnowledgeWorker(onError) {
       const doc = get(job.document_id).document;
       if (job.kind === 'process') save({ ...doc, status: 'ready', reviewStatus: 'pending', publicationStatus: 'unpublished', chunks: result.chunks_added, piiDetected: result.pii_detected, error: null });
       if (job.kind === 'publish') {
+        if (result.expired) {
+          save({ ...doc, status: 'expired', publicationStatus: 'expired', error: null });
+          event(job.actor_id, 'knowledge.expired', doc.id);
+          return;
+        }
         for (const previous of history(doc)) {
           if (previous.id !== doc.id && previous.status === 'indexed') save({ ...previous, status: 'superseded', publicationStatus: 'superseded', supersededById: doc.id });
         }
@@ -127,7 +151,8 @@ router.get('/documents', (_req, res) => {
   const all = documents();
   res.json({ documents: all.map(doc => {
     const family = all.filter(item => item.familyId === doc.familyId);
-    const active = family.find(item => item.publicationStatus === 'published' || (!item.publicationStatus && item.status === 'indexed'));
+    const active = family.find(item => effectiveWindowStatus(item) !== 'expired' &&
+      (item.publicationStatus === 'published' || (!item.publicationStatus && item.status === 'indexed')));
     return { ...doc, isLatest: !family.some(item => item.revision > doc.revision), activeRevisionId: active?.id || null, activeRevision: active?.revision || null };
   }) });
 });
@@ -140,7 +165,7 @@ const receiveUpload = (req, res, next) => {
 function uploadRevision(req, res) {
   if (pendingKnowledgeJobs() >= 100) return res.status(429).json({ error: 'The knowledge queue is full. Try again after pending jobs finish.' });
   const parsed = metadata.safeParse(req.body);
-  if (!parsed.success || !req.file?.size) return res.status(400).json({ error: 'Choose a file and provide a title, market, and category.' });
+  if (!parsed.success || !req.file?.size) return res.status(400).json({ error: parsed.error?.issues?.[0]?.message || 'Choose a file and provide a title, market, and category.' });
   const filename = basename(req.file.originalname.replaceAll('\\', '/'));
   if (!['.pdf', '.txt', '.md'].includes(extname(filename).toLowerCase())) return res.status(400).json({ error: 'Use PDF, TXT, or Markdown files.' });
   const parent = req.params.id ? get(req.params.id)?.document : null;
@@ -177,12 +202,14 @@ router.post('/documents/:id/approve', async (req, res) => {
     return res.status(409).json({ error: 'Only a ready, unpublished document awaiting review can be approved.' });
   }
   if (familyBusy(doc) || history(doc)[0].id !== doc.id) return res.status(409).json({ error: 'Only the latest revision can be approved, and no other revision may be changing.' });
+  if (effectiveWindowStatus(doc) === 'expired') return res.status(409).json({ error: 'This revision expired before approval. Upload a new revision with a current effective window.' });
   const approved = { ...doc, status: 'publishing', reviewStatus: 'approved', publicationStatus: 'publishing', approvalId: randomUUID(),
     approvedById: req.session.userId, approvedAt: new Date().toISOString(), error: null };
   const jobId = transaction(() => {
     save(approved);
     event(req.session.userId, 'knowledge.approved', row.id);
-    return enqueueKnowledgeJob(approved, 'publish', req.session.userId);
+    const notBefore = approved.effectiveFrom ? Date.parse(approved.effectiveFrom + 'T00:00:00.000Z') : Date.now();
+    return enqueueKnowledgeJob(approved, 'publish', req.session.userId, { notBefore: Math.max(Date.now(), notBefore) });
   });
   res.status(202).json({ document: approved, jobId });
 });
@@ -210,7 +237,8 @@ router.post('/documents/:id/retry', (req, res) => {
   if (pendingKnowledgeJobs() >= 100) return res.status(429).json({ error: 'The knowledge queue is full.' });
   if (row.document.status === 'archived') {
     const doc = createRevision(req, { originalname: row.filename, buffer: row.content },
-      { title: row.document.title, market: row.document.market, category: row.document.category, product: row.document.product }, row.document);
+      { title: row.document.title, market: row.document.market, category: row.document.category, product: row.document.product,
+        effectiveFrom: row.document.effectiveFrom, effectiveTo: row.document.effectiveTo }, row.document);
     return res.status(202).json({ document: doc });
   }
   transaction(() => {
@@ -250,6 +278,14 @@ router.post('/jobs/:id/retry', (req, res) => {
   if (job.state !== 'failed') return res.status(409).json({ error: 'Only failed jobs can be retried.' });
   if (pendingKnowledgeJobs() >= 100) return res.status(429).json({ error: 'The knowledge queue is full.' });
   const doc = get(job.document_id).document;
+  if (job.kind === 'publish' && effectiveWindowStatus(doc) === 'expired') {
+    transaction(() => {
+      database().prepare("UPDATE knowledge_jobs SET state = 'cancelled', error = NULL, updated_at = ? WHERE id = ?").run(Date.now(), job.id);
+      save({ ...doc, status: 'expired', publicationStatus: 'expired', error: null });
+      event(req.session.userId, 'knowledge.expired', doc.id);
+    });
+    return res.json({ jobId: job.id, expired: true });
+  }
   if ((job.kind === 'process' && (doc.status !== 'failed' || history(doc)[0].id !== doc.id)) ||
       (job.kind === 'publish' && (doc.publicationStatus !== 'publishing' || doc.approvalId !== job.approval_id)) ||
       (job.kind === 'withdraw' && doc.publicationStatus !== 'withdrawing')) return res.status(409).json({ error: 'This job is no longer current.' });

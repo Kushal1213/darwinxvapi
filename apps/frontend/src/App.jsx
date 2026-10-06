@@ -9,6 +9,7 @@ const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
 const ArchitecturePage = lazy(() => import('./pages/ArchitecturePage'));
 const CallHistoryPage = lazy(() => import('./pages/CallHistoryPage'));
 const TeamPage = lazy(() => import('./pages/TeamPage'));
+const HandoffInboxPage = lazy(() => import('./pages/HandoffInboxPage'));
 
 export default function App() {
   const getInitialTab = () => {
@@ -22,6 +23,7 @@ export default function App() {
       'analytics',
       'architecture',
       'history',
+      'handoffs',
       'team',
     ];
     if (tabs.includes(search)) return search;
@@ -83,6 +85,9 @@ export default function App() {
             selectedId={selectedCallId}
             onSelectCall={reviewCall}
           />
+        )}
+        {activeTab === 'handoffs' && (
+          <HandoffInboxPage onReviewCall={reviewCall} />
         )}
         {activeTab === 'team' && <TeamPage />}
       </Suspense>

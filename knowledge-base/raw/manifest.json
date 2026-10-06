@@ -9,7 +9,9 @@
       "title": "Adira Finance Faq",
       "size_kb": 4.3,
       "version": "1.0",
-      "pii": false
+      "pii": false,
+      "product": "finance",
+      "agent_eligible": true
     },
     {
       "file": "bajaj_finserv_loan_guide.txt",
@@ -19,7 +21,9 @@
       "title": "Bajaj Finserv Loan Guide",
       "size_kb": 3.0,
       "version": "1.0",
-      "pii": false
+      "pii": false,
+      "product": "loan",
+      "agent_eligible": true
     },
     {
       "file": "hdfc_life_term_insurance.txt",
@@ -29,7 +33,9 @@
       "title": "Hdfc Life Term Insurance",
       "size_kb": 2.8,
       "version": "1.0",
-      "pii": false
+      "pii": false,
+      "product": "insurance",
+      "agent_eligible": true
     },
     {
       "file": "health_insurance_india_complete.txt",
@@ -39,7 +45,9 @@
       "title": "Health Insurance India Complete",
       "size_kb": 5.1,
       "version": "1.0",
-      "pii": false
+      "pii": false,
+      "product": "insurance",
+      "agent_eligible": true
     },
     {
       "file": "home_credit_india_complete.txt",
@@ -49,7 +57,9 @@
       "title": "Home Credit India Complete",
       "size_kb": 2.9,
       "version": "1.0",
-      "pii": false
+      "pii": false,
+      "product": "loan",
+      "agent_eligible": true
     },
     {
       "file": "indonesia_consumer_finance_script.txt",
@@ -59,7 +69,9 @@
       "title": "Indonesia Consumer Finance Script",
       "size_kb": 2.8,
       "version": "1.0",
-      "pii": false
+      "pii": false,
+      "product": "finance",
+      "agent_eligible": true
     },
     {
       "file": "indonesia_finance_complete.txt",
@@ -69,7 +81,9 @@
       "title": "Indonesia Finance Complete",
       "size_kb": 3.9,
       "version": "1.0",
-      "pii": false
+      "pii": false,
+      "product": "finance",
+      "agent_eligible": true
     },
     {
       "file": "insurance_dekho_health_faq.html",
@@ -79,7 +93,9 @@
       "title": "Insurance Dekho Health Faq",
       "size_kb": 373.5,
       "version": "1.0",
-      "pii": false
+      "pii": false,
+      "product": "insurance",
+      "agent_eligible": true
     },
     {
       "file": "insurance_product_faq_internal.txt",
@@ -89,7 +105,9 @@
       "title": "Insurance Product Faq Internal",
       "size_kb": 2.7,
       "version": "1.0",
-      "pii": false
+      "pii": false,
+      "product": "insurance",
+      "agent_eligible": true
     },
     {
       "file": "insurancedekho_health_faq.html",
@@ -99,7 +117,9 @@
       "title": "Insurancedekho Health Faq",
       "size_kb": 183.3,
       "version": "1.0",
-      "pii": false
+      "pii": false,
+      "product": "insurance",
+      "agent_eligible": true
     },
     {
       "file": "kyc_and_regulatory_guide.txt",
@@ -109,7 +129,9 @@
       "title": "Kyc And Regulatory Guide",
       "size_kb": 3.1,
       "version": "1.0",
-      "pii": false
+      "pii": false,
+      "product": "reference",
+      "agent_eligible": false
     },
     {
       "file": "loan_against_property_guide.txt",
@@ -119,7 +141,9 @@
       "title": "Loan Against Property Guide",
       "size_kb": 3.3,
       "version": "1.0",
-      "pii": false
+      "pii": false,
+      "product": "loan",
+      "agent_eligible": true
     },
     {
       "file": "loan_qualification_rules.txt",
@@ -129,7 +153,9 @@
       "title": "Loan Qualification Rules",
       "size_kb": 1.5,
       "version": "1.0",
-      "pii": false
+      "pii": false,
+      "product": "loan",
+      "agent_eligible": true
     },
     {
       "file": "objection_handling_playbook.txt",
@@ -139,7 +165,9 @@
       "title": "Objection Handling Playbook",
       "size_kb": 5.7,
       "version": "1.0",
-      "pii": false
+      "pii": false,
+      "product": "reference",
+      "agent_eligible": false
     },
     {
       "file": "ph_bancassurance_script_tagalog.txt",
@@ -149,7 +177,9 @@
       "title": "Ph Bancassurance Script Tagalog",
       "size_kb": 2.5,
       "version": "1.0",
-      "pii": false
+      "pii": false,
+      "product": "bancassurance",
+      "agent_eligible": true
     },
     {
       "file": "ph_life_insurance_complete.txt",
@@ -159,7 +189,9 @@
       "title": "Ph Life Insurance Complete",
       "size_kb": 4.5,
       "version": "1.0",
-      "pii": false
+      "pii": false,
+      "product": "bancassurance",
+      "agent_eligible": true
     },
     {
       "file": "policybazaar_health_faq.html",
@@ -169,7 +201,9 @@
       "title": "Policybazaar Health Faq",
       "size_kb": 21.1,
       "version": "1.0",
-      "pii": false
+      "pii": false,
+      "product": "insurance",
+      "agent_eligible": true
     },
     {
       "file": "sbi_life_insurance_guide.txt",
@@ -179,7 +213,9 @@
       "title": "Sbi Life Insurance Guide",
       "size_kb": 3.8,
       "version": "1.0",
-      "pii": false
+      "pii": false,
+      "product": "insurance",
+      "agent_eligible": true
     },
     {
       "file": "tata_capital_loan_guide.txt",
@@ -189,7 +225,9 @@
       "title": "Tata Capital Loan Guide",
       "size_kb": 2.4,
       "version": "1.0",
-      "pii": false
+      "pii": false,
+      "product": "loan",
+      "agent_eligible": true
     },
     {
       "file": "voice_agent_conversation_scenarios.txt",
@@ -199,7 +237,9 @@
       "title": "Voice Agent Conversation Scenarios",
       "size_kb": 4.9,
       "version": "1.0",
-      "pii": false
+      "pii": false,
+      "product": "reference",
+      "agent_eligible": false
     }
   ],
   "note": "Nine PDF entries referenced in the original manifest were not present on disk and were removed so this manifest matches the indexed source set.",
@@ -214,6 +254,7 @@
     "philippines-insurance-commission-circular-letter-2022-04.pdf",
     "Star Comprehensive Insurance Policy.pdf"
   ],
-  "schema_version": "1.0",
-  "last_updated": "2026-09-22"
+  "schema_version": "1.1",
+  "last_updated": "2026-09-27",
+  "scope_note": "Product scopes describe the bundled content, not a new approval or freshness review. Mixed-product regulatory and conversation-training sources remain reference-only; publish reviewed product-specific revisions to use them in agent answers."
 }

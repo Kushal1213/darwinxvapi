@@ -20,10 +20,9 @@ Endpoints:
                                           This is the literal "expose nudges
                                           through ... a WebSocket" deliverable.
 
-apps/api-gateway's existing Socket.IO layer (src/socket/handlers.js) can
-subscribe a browser session to this WS and re-broadcast to the React
-dashboard — see known_limitations.md for the remaining Node<->Python wiring
-that hasn't been done in this environment.
+apps/api-gateway posts final transcript chunks to /detect-signals, persists the
+returned nudges, and broadcasts them through its authenticated Socket.IO layer.
+The scenario WebSocket remains useful for standalone replay clients.
 """
 from __future__ import annotations
 

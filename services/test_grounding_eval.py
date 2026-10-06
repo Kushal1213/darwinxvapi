@@ -9,10 +9,12 @@ from grounding_eval import DEFAULT_CORPUS, DEFAULT_MANIFEST, run_evaluation
 class GroundingEvaluationTests(unittest.TestCase):
     def test_fixture_manifest_passes_and_reports_denominators(self):
         report = run_evaluation(DEFAULT_MANIFEST, DEFAULT_CORPUS)
-        self.assertEqual(report["totals"], {"cases": 6, "passed": 6, "failed": 0})
+        self.assertEqual(report["totals"], {"cases": 7, "passed": 7, "failed": 0})
         by_id = {case["id"]: case for case in report["cases"]}
         self.assertEqual(by_id["answer-india-loan-documents"]["sources"], ["fixture-india-loan-policy"])
         self.assertEqual(by_id["abstain-unpublished-source"]["action"], "abstain")
+        self.assertEqual(by_id["abstain-expired-source"]["action"], "abstain")
+        self.assertNotIn("fixture-expired-loan-policy", by_id["abstain-expired-source"]["sources"])
         self.assertEqual(by_id["abstain-wrong-market"]["retrieved_count"], 0)
 
     def test_manifest_failures_are_explicit(self):

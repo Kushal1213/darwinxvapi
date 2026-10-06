@@ -36,6 +36,67 @@ export function getDatabase() {
       id INTEGER PRIMARY KEY, nudge_id TEXT NOT NULL REFERENCES nudges(id),
       actor_id TEXT REFERENCES users(id), action TEXT NOT NULL, created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS handoff_deliveries (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL REFERENCES workspace(id),
+      call_id TEXT NOT NULL REFERENCES calls(id),
+      escalation_id TEXT NOT NULL UNIQUE,
+      state TEXT NOT NULL,
+      destination_type TEXT NOT NULL DEFAULT 'internal_inbox',
+      priority TEXT NOT NULL,
+      requested_at TEXT NOT NULL,
+      delivered_at TEXT,
+      acknowledged_at TEXT,
+      resolved_at TEXT,
+      resolution TEXT,
+      updated_at TEXT NOT NULL,
+      payload TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS handoff_deliveries_inbox
+      ON handoff_deliveries(workspace_id, state, requested_at DESC);
+    CREATE INDEX IF NOT EXISTS handoff_deliveries_call
+      ON handoff_deliveries(call_id, requested_at DESC);
+    CREATE TABLE IF NOT EXISTS handoff_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      delivery_id TEXT NOT NULL REFERENCES handoff_deliveries(id),
+      actor_id TEXT REFERENCES users(id),
+      action TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      payload TEXT
+    );
+    CREATE INDEX IF NOT EXISTS handoff_events_delivery
+      ON handoff_events(delivery_id, id);
+    CREATE TABLE IF NOT EXISTS knowledge_gaps (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL REFERENCES workspace(id),
+      fingerprint TEXT NOT NULL,
+      market TEXT NOT NULL,
+      product TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open',
+      occurrence_count INTEGER NOT NULL DEFAULT 1,
+      question_excerpt TEXT NOT NULL,
+      example_call_ids TEXT NOT NULL,
+      first_seen_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
+      resolution_note TEXT,
+      resolution_document_id TEXT REFERENCES knowledge_documents(id),
+      updated_by TEXT REFERENCES users(id),
+      updated_at TEXT NOT NULL,
+      UNIQUE(workspace_id, fingerprint)
+    );
+    CREATE INDEX IF NOT EXISTS knowledge_gaps_inbox
+      ON knowledge_gaps(workspace_id, status, last_seen_at DESC);
+    CREATE TABLE IF NOT EXISTS knowledge_gap_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      gap_id TEXT NOT NULL REFERENCES knowledge_gaps(id),
+      actor_id TEXT REFERENCES users(id),
+      action TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      payload TEXT
+    );
+    CREATE INDEX IF NOT EXISTS knowledge_gap_events_gap
+      ON knowledge_gap_events(gap_id, id);
     CREATE TABLE IF NOT EXISTS knowledge_documents (
       id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL REFERENCES workspace(id),
       filename TEXT NOT NULL, content BLOB NOT NULL, payload TEXT NOT NULL
@@ -60,7 +121,7 @@ export function getDatabase() {
       id INTEGER PRIMARY KEY, actor_id TEXT NOT NULL REFERENCES users(id),
       action TEXT NOT NULL, target_id TEXT NOT NULL, created_at INTEGER NOT NULL
     );
-    PRAGMA user_version = 5;
+    PRAGMA user_version = 7;
   `);
   database = db;
   return db;

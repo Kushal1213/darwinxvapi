@@ -154,16 +154,18 @@ export default function AnalyticsPage() {
         throw new Error(
           'The server did not return a CSV report. Please try again.'
         );
-      const blob = await response.blob();
+      const csv = await response.text();
+      if (!csv.startsWith('date,calls,completed,handoffs'))
+        throw new Error('The server returned an invalid CSV report. Please try again.');
       if (controller.signal.aborted) return;
-      const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
-      anchor.href = url;
+      // Use the server's attachment response so browser download handling can
+      // confirm and save the file, including in embedded browsers.
+      anchor.href = `/api/analytics?${query}`;
       anchor.download = `veyra-analytics-${market}-${days}days-${new Date().toISOString().slice(0, 10)}.csv`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
       setExportMessage('CSV download started.');
     } catch (err) {
       if (!controller.signal.aborted)

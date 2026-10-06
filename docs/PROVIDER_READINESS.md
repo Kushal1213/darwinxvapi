@@ -26,7 +26,7 @@ npm run readiness:providers -- --audit
 The report currently covers:
 
 - Gemini API usage in RAG and ingestion, including configured model IDs and the
-  `google-generativeai` package pin.
+  maintained `google-genai` package pin.
 - Vapi browser SDK and gateway voice configuration.
 - Deepgram model references used through Vapi.
 - Node engine expectations, Python dependency pinning, and optional npm audit
@@ -40,7 +40,9 @@ quality.
 
 Current expected findings:
 
-- Gemini calls still use `google-generativeai`; migration to the maintained
-  Google Gen AI SDK is pending behind contract tests.
+- The Python services use the maintained Google Gen AI SDK through a focused
+  adapter. Contract tests cover embedding request shape, 3,072-dimensional
+  output configuration, generation settings, missing configuration, and client
+  lifecycle. The embedding model and dimension were intentionally unchanged.
 - Vapi fallback configuration includes an OpenAI model path that needs account
   and data-handling review before live use.

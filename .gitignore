@@ -27,6 +27,7 @@ env/
 *.egg-info/
 .pytest_cache/
 htmlcov/
+evaluation/grounding_report.json
 
 # ── Vector DB / Index ────────────────────────────────────────
 knowledge-base/embeddings/*.index

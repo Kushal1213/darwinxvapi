@@ -7,6 +7,7 @@ import {
 } from '../components/WorkspaceUI';
 import { Mic, PhoneOff, Phone, Send, CheckCircle2, Globe } from 'lucide-react';
 import { io as socketIO } from 'socket.io-client';
+import { useWorkspaceAuth } from '../components/WorkspaceAuth';
 
 // ─── Market Profiles ──────────────────────────────────────────
 const MARKETS = {
@@ -64,6 +65,7 @@ function MessageBubble({ msg }) {
             </summary>
             <div className="mt-3 space-y-2 text-muted">
               {source.revision && <p>Revision {source.revision}</p>}
+              {source.page && <p>PDF page {source.page}</p>}
               {source.document_id && (
                 <p className="break-all text-[10px]">{source.document_id}</p>
               )}
@@ -86,6 +88,8 @@ function MessageBubble({ msg }) {
 
 // ─── Main Page ────────────────────────────────────────────────
 export default function VoiceStudioPage() {
+  const { user } = useWorkspaceAuth();
+  const activeCallKey = `veyra.activeCall.${user.id}`;
   const [market, setMarket] = useState('india-loan');
   const [callState, setCallState] = useState('idle'); // idle | connecting | active | ending
   const [isSpeaking, setIsSpeaking] = useState(false); // agent speaking
@@ -115,6 +119,7 @@ export default function VoiceStudioPage() {
   const stageTimerRef = useRef(null);
   const sessionIdRef = useRef(null);
   const [hasSession, setHasSession] = useState(false);
+  const [restoringSession, setRestoringSession] = useState(true);
   const socketRef = useRef(null);
   const chatEndRef = useRef(null);
 
@@ -140,10 +145,11 @@ export default function VoiceStudioPage() {
     }
     const data = await response.json();
     sessionIdRef.current = data.call_id;
+    sessionStorage.setItem(activeCallKey, data.call_id);
     setHasSession(true);
     socketRef.current?.emit('monitor:call', { call_id: data.call_id });
     return data.call_id;
-  }, [market]);
+  }, [activeCallKey, market]);
 
   // ── Scroll to bottom on new messages ──
   useEffect(() => {
@@ -168,6 +174,45 @@ export default function VoiceStudioPage() {
     });
     return () => socket.disconnect();
   }, []);
+
+  // Keep a text conversation reachable after changing pages or reloading.
+  // The server snapshot is authoritative, so completed calls are never resumed.
+  useEffect(() => {
+    let mounted = true;
+    const callId = sessionStorage.getItem(activeCallKey);
+    if (!callId) {
+      setRestoringSession(false);
+      return;
+    }
+    (async () => {
+      try {
+        const response = await fetch(`/api/voice/session/${encodeURIComponent(callId)}`);
+        if (!response.ok) throw new Error('Session is unavailable');
+        const session = await response.json();
+        if (!['created', 'active', 'escalated'].includes(session.status) || !MARKETS[session.market]) {
+          throw new Error('Session has ended');
+        }
+        if (!mounted) return;
+        sessionIdRef.current = callId;
+        setMarket(session.market);
+        setUseTextMode(true);
+        setMessages((session.turns || []).map((turn, index) => ({
+          ...turn,
+          id: `${callId}-${index}`,
+          agentName: `${MARKETS[session.market].agent} (Veyra)`,
+          ts: turn.ts || session.created_at,
+        })));
+        setTotalCallLatency([...(session.turns || [])].reverse().find((turn) => turn.role === 'assistant')?.latency_ms || null);
+        setHasSession(true);
+        socketRef.current?.emit('monitor:call', { call_id: callId });
+      } catch (_) {
+        if (mounted) sessionStorage.removeItem(activeCallKey);
+      } finally {
+        if (mounted) setRestoringSession(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [activeCallKey]);
 
   // ── Web Speech API: initialize SpeechRecognition with Silence Debouncing ──
   const silenceTimerRef = useRef(null);
@@ -255,16 +300,26 @@ export default function VoiceStudioPage() {
     recognition.onerror = (event) => {
       if (event.error === 'no-speech' || event.error === 'aborted') return;
       console.warn('SpeechRecognition notice:', event.error);
-      if (event.error === 'not-allowed') {
-        setError(
-          'Microphone access denied. Click the lock icon in the address bar → allow microphone.'
-        );
-        setCallState('idle');
+      if (event.error === 'not-allowed' || event.error === 'network') {
+        setError(event.error === 'not-allowed'
+          ? 'Microphone access was denied. Continue this session in Text Mode, or allow microphone access and try again.'
+          : 'Voice recognition is unavailable. Continue this session in Text Mode.');
+        // Recognition cannot produce a transcript after either error. Release
+        // the microphone and leave the server session available for text input.
         callStateRef.current = 'idle';
-      } else if (event.error === 'network') {
-        setError(
-          'Voice recognition is unavailable. Check your internet connection or use Text Mode.'
-        );
+        setCallState('idle');
+        setUseTextMode(true);
+        setIsListening(false);
+        setActiveStage(null);
+        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+        try { recognition.abort(); } catch (_) {}
+        cancelAnimationFrame(animFrameRef.current);
+        micStreamRef.current?.getTracks().forEach((track) => track.stop());
+        audioCtxRef.current?.close();
+        micStreamRef.current = null;
+        audioCtxRef.current = null;
+        analyserRef.current = null;
+        setVolumeLevel(0);
       }
     };
 
@@ -516,7 +571,7 @@ export default function VoiceStudioPage() {
     setRawError(null);
     setCallState('connecting');
     callStateRef.current = 'connecting';
-    setMessages([]);
+    if (!sessionIdRef.current) setMessages([]);
     setLatencies({});
     accumulatedSpeechRef.current = '';
     setPartialTranscript('');
@@ -605,6 +660,7 @@ export default function VoiceStudioPage() {
             'Unable to save this call. Please try ending it again.'
           );
         sessionIdRef.current = null;
+        sessionStorage.removeItem(activeCallKey);
         setHasSession(false);
       }
       setError(null);
@@ -614,7 +670,7 @@ export default function VoiceStudioPage() {
       callStateRef.current = 'idle';
       setCallState('idle');
     }
-  }, [stopMicVisualization]);
+  }, [activeCallKey, stopMicVisualization]);
 
   // ── Text-mode query (fallback) ──
   const handleTextQuery = useCallback(
@@ -698,7 +754,7 @@ export default function VoiceStudioPage() {
   );
 
   const isCallActive = callState === 'active';
-  const isConnecting = callState === 'connecting' || callState === 'ending';
+  const isConnecting = restoringSession || callState === 'connecting' || callState === 'ending';
 
   return (
     <div className="page">
@@ -712,7 +768,9 @@ export default function VoiceStudioPage() {
               isCallActive ? 'success' : isConnecting ? 'warning' : 'neutral'
             }
           >
-            {isCallActive
+            {restoringSession
+              ? 'Restoring session'
+              : isCallActive
               ? 'Call active'
               : isConnecting
                 ? callState === 'ending'
@@ -838,7 +896,7 @@ export default function VoiceStudioPage() {
                   className="btn btn-primary w-full"
                 >
                   <Phone size={15} />
-                  {isConnecting ? 'Connecting…' : 'Start Voice Call'}
+                  {restoringSession ? 'Restoring session…' : isConnecting ? 'Connecting…' : 'Start Voice Call'}
                 </button>
               )}
               {(isCallActive || hasSession) && (

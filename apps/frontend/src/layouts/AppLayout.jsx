@@ -6,6 +6,7 @@ import {
   BookOpen,
   ChevronRight,
   History,
+  Inbox,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -28,6 +29,7 @@ const groups = [
       ['agents', 'Voice Agents', Phone],
       ['insights', 'Live Insights', Activity],
       ['history', 'Call History', History],
+      ['handoffs', 'Handoff Inbox', Inbox],
     ],
   },
   {

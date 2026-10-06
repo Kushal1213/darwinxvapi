@@ -33,7 +33,7 @@ export function buildAnalytics(sessions, { days = 7, market = 'all', now = new D
     if (market !== 'all' && session.market !== market) continue;
     const callMarket = typeof session.market === 'string' && session.market ? session.market : 'unknown';
     const completed = session.status === 'completed';
-    const handoff = (Array.isArray(session.escalations) && session.escalations.length > 0)
+    const handoff = (Array.isArray(session.escalations) && session.escalations.some((item) => !item.resolved_at))
       || session.outcome === 'human_handoff_requested';
     const turns = Array.isArray(session.turns) ? session.turns : [];
     const day = dayBuckets.get(new Date(created).toISOString().slice(0, 10));

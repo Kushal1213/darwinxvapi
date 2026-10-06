@@ -19,6 +19,8 @@ import json
 import time
 import uuid
 import logging
+from contextlib import asynccontextmanager
+from datetime import date, datetime, timezone
 from pathlib import Path
 from functools import lru_cache
 from typing import Optional
@@ -26,7 +28,6 @@ from typing import Optional
 import numpy as np
 import faiss
 import yaml
-import google.generativeai as genai
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -57,6 +58,8 @@ BASE_DIR = Path(__file__).resolve().parents[2].resolve()
 load_dotenv(os.getenv('VEYRA_ENV_FILE') or BASE_DIR / ".env")
 sys.path.insert(0, str(BASE_DIR / "services"))
 from managed_knowledge import generation, read_snapshot
+from answer_support import extract_supported_answer, terms as evidence_terms
+from gemini_provider import GeminiProvider
 
 # ── Configuration ─────────────────────────────────────────────
 GEMINI_API_KEY   = os.getenv("GEMINI_API_KEY", "")
@@ -84,6 +87,24 @@ faiss_index: Optional[faiss.IndexFlatIP] = None
 chunk_store: list[dict] = []
 prompts_config: dict = {}
 embedding_cache_hits = 0
+gemini = GeminiProvider()
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    load_prompts()
+    logger.info(f"GEMINI_API_KEY configured: {bool(GEMINI_API_KEY)}")
+    if GEMINI_API_KEY:
+        gemini.configure(GEMINI_API_KEY)
+        logger.info(f"Gemini API configured | llm={GEMINI_MODEL} | embed={EMBEDDING_MODEL}")
+    else:
+        logger.warning("GEMINI_API_KEY missing")
+    load_index()
+    try:
+        yield
+    finally:
+        gemini.close()
+
 
 # ── FastAPI App with OpenAPI Docs ──────────────────────────────
 app = FastAPI(
@@ -92,6 +113,7 @@ app = FastAPI(
     version="1.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -135,7 +157,10 @@ def load_index():
     global faiss_index, chunk_store, _snapshot, _loaded_token
     with _index_lock:
         try:
-            token = generation(INDEX_DIR)
+            managed_token = generation(INDEX_DIR)
+            # Legacy ingestion and metadata migrations must reload too.
+            token = (managed_token, *[(p.stat().st_mtime_ns, p.stat().st_size) if p.exists() else None
+                                      for p in (INDEX_FILE, METADATA_FILE)])
             if _snapshot is not None and token == _loaded_token:
                 return _snapshot
             combined = faiss.IndexFlatIP(EMBEDDING_DIM)
@@ -148,7 +173,7 @@ def load_index():
                 if legacy.ntotal:
                     combined.add(legacy.reconstruct_n(0, legacy.ntotal))
                 records.extend(legacy_records)
-            managed, managed_records = read_snapshot(INDEX_DIR, EMBEDDING_DIM, token)
+            managed, managed_records = read_snapshot(INDEX_DIR, EMBEDDING_DIM, managed_token)
             if managed.ntotal:
                 combined.add(managed.reconstruct_n(0, managed.ntotal))
             records.extend(managed_records)
@@ -162,24 +187,11 @@ def load_index():
             raise HTTPException(503, 'Knowledge snapshot unavailable; restore the index or retry ingestion.')
 
 
-@app.on_event("startup")
-async def startup():
-    load_prompts()
-    logger.info(f"GEMINI_API_KEY configured: {bool(GEMINI_API_KEY)}")
-    if GEMINI_API_KEY:
-        genai.configure(api_key=GEMINI_API_KEY)
-        logger.info(f"Gemini API configured | llm={GEMINI_MODEL} | embed={EMBEDDING_MODEL}")
-    else:
-        logger.warning("GEMINI_API_KEY missing")
-
-    load_index()
-
-
 # ── LRU Caching for Embeddings ─────────────────────────────────
 @lru_cache(maxsize=512)
 def get_cached_embedding(query_text: str) -> tuple:
     """Computes and caches normalized 3072d vector for query."""
-    result = genai.embed_content(
+    result = gemini.embed_content(
         model=EMBEDDING_MODEL,
         content=query_text,
         task_type="retrieval_query",
@@ -222,25 +234,54 @@ def product_is_eligible(chunk_product: Optional[str], product: Optional[str] = N
         return True
     value = (chunk_product or "").strip().lower()
     requested = product.strip().lower()
+    specific_loans = {'personal loan', 'personal-loan', 'home loan', 'home-loan', 'business loan', 'business-loan', 'auto loan', 'auto-loan', 'car loan', 'car-loan', 'loan against property'}
+    specific_insurance = {'life insurance', 'life-insurance', 'health insurance', 'health-insurance'}
     if not value:
         return False
     if value == 'general':
         return True  # Explicitly reviewed as shared across products.
     if value == requested:
         return True
+    if requested in specific_loans:
+        return value in {'loan', 'loans'} or value.replace(' ', '-') == requested.replace(' ', '-')
+    if requested in specific_insurance:
+        return value == 'insurance' or value.replace(' ', '-') == requested.replace(' ', '-')
     if requested == "loan" and (value == "loans" or value.endswith("-loan") or value.endswith("-loans")):
         return True
-    if requested == "insurance" and ("insurance" in value or value == "policy"):
+    if requested == "insurance" and ("insurance" in value or value in {'policy', 'bancassurance'}):
         return True
     return False
 
 
+def query_product_scope(query: str) -> Optional[str]:
+    """Use explicit product words to prevent a cross-product citation."""
+    loan = bool(re.search(r'\bloans?\b', query, re.I))
+    insurance = bool(re.search(r'\b(?:insurance|bancassurance|policy|policies)\b', query, re.I))
+    if loan == insurance:
+        return None
+    return 'loan' if loan else 'insurance'
+
+
+def effective_date_is_eligible(chunk: dict, today: Optional[date] = None) -> bool:
+    current = today or datetime.now(timezone.utc).date()
+    try:
+        effective_from = date.fromisoformat(chunk['effective_from']) if chunk.get('effective_from') else None
+        effective_to = date.fromisoformat(chunk['effective_to']) if chunk.get('effective_to') else None
+    except (TypeError, ValueError):
+        return False
+    return not ((effective_from and effective_from > current) or (effective_to and effective_to < current))
+
+
 def chunk_is_eligible(chunk: dict, market: str, product: Optional[str] = None) -> bool:
+    if chunk.get("agent_eligible") is False:
+        return False
     if chunk.get("published") is False:
         return False
     if chunk.get("publication_status") not in (None, "", "published"):
         return False
     if chunk.get("review_status") not in (None, "", "approved"):
+        return False
+    if not effective_date_is_eligible(chunk):
         return False
     if chunk.get("market") != market:
         return False
@@ -268,13 +309,13 @@ def lexical_candidates(query: str, market: str, records=None, product: Optional[
     remain identical to the normal FAISS path. This is much safer than searching
     with a zero vector, whose results have no relationship to the question.
     """
-    query_terms = set(re.findall(r"[a-z0-9]+", normalize_query(query)))
+    query_terms = evidence_terms(normalize_query(query))
     market_name = canonical_market(market)
     ranked = []
     for chunk in (chunk_store if records is None else records):
         if not chunk_is_eligible(chunk, market_name, product):
             continue
-        text_terms = set(re.findall(r"[a-z0-9]+", chunk.get("content", "").lower()))
+        text_terms = evidence_terms(chunk.get("content", ""))
         overlap = len(query_terms & text_terms)
         if overlap:
             score = overlap / max(1, len(query_terms))
@@ -290,10 +331,10 @@ def select_market_chunks(candidates: list[dict], market: str, top_k: int, produc
 
 # ── Data Models ───────────────────────────────────────────────
 class RetrieveRequest(BaseModel):
-    query: str = Field(..., min_length=1, max_length=4000, pattern=r'\S', example="What is the minimum age and monthly income for personal loan?")
+    query: str = Field(..., min_length=1, max_length=4000, pattern=r'\S', json_schema_extra={"example": "What is the minimum age and monthly income for personal loan?"})
     top_k: int = Field(default=2, ge=1, le=5)
-    language: str = Field(default="en", example="en")
-    market: str = Field(default="india", example="india")
+    language: str = Field(default="en", json_schema_extra={"example": "en"})
+    market: str = Field(default="india", json_schema_extra={"example": "india"})
     product: Optional[str] = Field(default=None, min_length=1, max_length=100)
     session_id: Optional[str] = None
 
@@ -325,7 +366,33 @@ def health():
         "indexed_chunks": len(records),
         "index_vectors": index.ntotal,
         "cache_hits": embedding_cache_hits,
+        "agent_scopes": knowledge_scopes(records),
     }
+
+
+def knowledge_scopes(records):
+    return {agent: sum(chunk_is_eligible(c, market, product) for c in records)
+            for agent, market, product in [
+                ('india-loan', 'india', 'loan'), ('india-insurance', 'india', 'insurance'),
+                ('ph-bancassurance', 'philippines', 'bancassurance'), ('id-finance', 'indonesia', 'finance')]}
+
+
+@app.get('/stats')
+def stats():
+    _, records = load_index()
+    sources = {}
+    for chunk in records:
+        key = chunk.get('document_id') or chunk.get('source', 'Unknown')
+        item = sources.setdefault(key, {
+            'source': chunk.get('source'), 'title': chunk.get('title', chunk.get('source')),
+            'market': chunk.get('market'), 'product': chunk.get('product'),
+            'effective_from': chunk.get('effective_from'), 'effective_to': chunk.get('effective_to'),
+            'managed': bool(chunk.get('document_id')), 'chunks': 0, 'eligible_chunks': 0,
+        })
+        item['chunks'] += 1
+        item['eligible_chunks'] += int(any(knowledge_scopes([chunk]).values()))
+    return {'total_chunks': len(records), 'agent_scopes': knowledge_scopes(records),
+            'sources': list(sources.values())}
 
 @app.get("/test", summary="Simple test endpoint")
 def test():
@@ -343,10 +410,21 @@ async def retrieve(req: RetrieveRequest, request: Request):
                        'ph-bancassurance': 'bancassurance', 'id-finance': 'finance'}.get(req.market.strip().lower())
     if implied_product and req.product and not product_is_eligible(req.product, implied_product):
         raise HTTPException(422, 'Product conflicts with the selected agent market')
-    product = req.product or implied_product
+    stated_product = query_product_scope(req.query)
     index, records = load_index()
+    # Older managed documents have no product metadata. Keep them searchable
+    # when the user has not selected a product or an agent scope explicitly.
+    product = req.product or implied_product or (stated_product if any(row.get('product') for row in records) else None)
     t0 = time.time()
     req_id = getattr(request.state, "request_id", "sys")
+    if stated_product and product and not product_is_eligible(product, stated_product):
+        return RetrieveResponse(
+            answer="I couldn't find supporting information for that market or product. Let me connect you with a specialist.",
+            sources=[], chunks=[], latency_ms=int((time.time() - t0) * 1000),
+            retrieval_latency_ms=0, llm_latency_ms=0, model=GEMINI_MODEL,
+            retrieved_count=0, kb_version=prompts_config.get("version", "1.1"),
+            retrieval_mode="none", abstention_reason="no_eligible_candidates",
+        )
     if not records:
         return RetrieveResponse(
             answer="No published knowledge is available yet. Ask an administrator to upload and approve a document.",
@@ -363,14 +441,18 @@ async def retrieve(req: RetrieveRequest, request: Request):
     retrieval_mode = "vector" if query_vec is not None else "lexical"
     candidates = []
     if query_vec is not None:
-        # Fetch broadly for recall, then enforce scope before content is used.
-        k = min(max(req.top_k * 8, 16), index.ntotal)
+        # Search inside the permitted scope. Searching a global top-16 first
+        # can hide every eligible chunk behind higher-scoring other products.
+        eligible_ids = [i for i, chunk in enumerate(records) if chunk_is_eligible(chunk, market, product)]
+        k = min(max(req.top_k * 8, 16), len(eligible_ids))
         try:
-            scores, indices = index.search(query_vec, k)
-            for score, idx in zip(scores[0], indices[0]):
-                if idx != -1 and idx < len(records):
-                    if chunk_is_eligible(records[idx], market, product):
-                        candidates.append({**records[idx], "_score": float(score)})
+            scoped = faiss.IndexFlatIP(index.d)
+            if eligible_ids:
+                scoped.add(index.reconstruct_batch(np.asarray(eligible_ids, dtype=np.int64)))
+            scores, indices = scoped.search(query_vec, k) if k else ([], [])
+            for score, offset in zip(scores[0] if k else [], indices[0] if k else []):
+                if offset != -1:
+                    candidates.append({**records[eligible_ids[offset]], "_score": float(score)})
         except Exception as e:
             logger.warning(f"[{req_id}] FAISS search failed ({e}), using lexical retrieval fallback")
             retrieval_mode = "lexical"
@@ -378,6 +460,14 @@ async def retrieve(req: RetrieveRequest, request: Request):
     else:
         candidates = lexical_candidates(req.query, market, records, product)
 
+    # Supplement semantic retrieval with exact terms, including short fields such
+    # as age/fee. Deduplicate overlap without discarding independent citations.
+    seen = {(c.get('document_id'), c.get('source'), c.get('chunk_id'), c.get('content')) for c in candidates}
+    for chunk in lexical_candidates(req.query, market, records, product):
+        key = (chunk.get('document_id'), chunk.get('source'), chunk.get('chunk_id'), chunk.get('content'))
+        if key not in seen:
+            candidates.append(chunk)
+            seen.add(key)
     logger.info(f"[{req_id}] Found {len(candidates)} candidates")
 
     retrieval_ms = int((time.time() - t_retrieval_start) * 1000)
@@ -398,7 +488,7 @@ async def retrieve(req: RetrieveRequest, request: Request):
         )
 
     # Select top chunks directly to save LLM context tokens & latency.
-    top_chunks = select_market_chunks(candidates, market, req.top_k, product)
+    top_chunks = select_market_chunks(candidates, market, len(candidates), product)
     logger.info(f"[{req_id}] Selected {len(top_chunks)} top chunks for LLM")
 
     if not top_chunks:
@@ -414,13 +504,15 @@ async def retrieve(req: RetrieveRequest, request: Request):
     t_llm_start = time.time()
     try:
         logger.info(f"[{req_id}] Using direct knowledge synthesizer for query: '{req.query}'")
-        answer = synthesize_direct_knowledge_answer(req.query, top_chunks)
+        answer, support = extract_supported_answer(normalize_query(req.query), top_chunks)
+        answer = clean_for_speech(answer)
+        top_chunks = support
         logger.info(f"[{req_id}] Generated answer: {answer[:100]}")
     except Exception as e:
         logger.error(f"[{req_id}] Answer generation error: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        answer = "I apologize, but I encountered an error processing your request. Please try again or speak with a human agent."
+        raise HTTPException(503, "Answer extraction failed; please retry.") from e
     llm_ms = int((time.time() - t_llm_start) * 1000)
 
     total_ms = int((time.time() - t0) * 1000)
@@ -435,10 +527,13 @@ async def retrieve(req: RetrieveRequest, request: Request):
             "revision": c.get("revision"),
             "content_hash": c.get("content_hash"),
             "product": c.get("product"),
+            "effective_from": c.get("effective_from"),
+            "effective_to": c.get("effective_to"),
+            "page": c.get("page"),
             "chunk_id": c.get("chunk_id", "chk-01"),
             "score": round(c["_score"], 4),
             "category": c.get("category", "policy"),
-            "excerpt": clean_for_speech(c.get("content", ""))[:280],
+            "excerpt": c.get("content", ""),
         }
         for c in top_chunks
     ]
@@ -518,80 +613,8 @@ def normalize_query(query: str) -> str:
 
 
 def synthesize_direct_knowledge_answer(query: str, chunks: list[dict]) -> str:
-    """Return directly supported lines only; otherwise ask for human assistance."""
-    if not chunks:
-        return "I don't have that specific detail in our knowledge base right now."
-
-    query_lower = normalize_query(query)
-
-    # Document questions need the bullet items, not just the section headings.
-    if any(k in query_lower for k in ["document", "documents", "kyc", "paperwork"]):
-        doc_lines = []
-        in_documents_section = False
-        for c in chunks:
-            for raw_line in c["content"].splitlines():
-                line = raw_line.strip()
-                normalized = line.lower()
-                if normalized.startswith("documents required"):
-                    in_documents_section = True
-                    continue
-                if in_documents_section and not line:
-                    in_documents_section = False
-                    continue
-                if in_documents_section and line.startswith("-"):
-                    item = line.lstrip("-*#• ").strip()
-                    if item:
-                        doc_lines.append(item)
-                if len(doc_lines) >= 4:
-                    break
-            if len(doc_lines) >= 4:
-                break
-        if doc_lines:
-            return clean_for_speech("The required documents are " + "; ".join(doc_lines[:4]) + ".")
-
-    # 1. Human Escalation / Manager Request
-    if any(k in query_lower for k in ["manager", "supervisor", "escalate", "escalation", "human", "complaint"]):
-        return "I completely understand your concern. I am transferring your request to a senior supervisor immediately so they can assist you right away."
-
-    # 2. Out of scope question
-    if any(k in query_lower for k in ["stock price", "weather", "cricket", "movie", "recipe"]):
-        return "I appreciate the question, but I specialize exclusively in loans and insurance policies. I would be happy to help you with any loan or policy details!"
-
-    # Extract lines with substantive query-term overlap.
-    generic_terms = {
-        "what", "where", "which", "how", "this", "that", "with", "from",
-        "loan", "loans", "policy", "policies", "insurance", "india",
-        "current", "bank", "customer", "product", "products",
-        "the", "for", "and", "are", "you", "can", "does", "please", "tell", "about",
-    }
-    keywords = list({w for w in re.findall(r"[a-z0-9]+", query_lower) if len(w) >= 3 and w not in generic_terms})
-    if not keywords:
-        return "I couldn't find a clear answer in the approved information. Let me connect you with a specialist."
-
-    matched_lines = []
-    for c in chunks:
-        for l in c["content"].splitlines():
-            l_str = l.lstrip("-*#• ").strip()
-            if (
-                not l_str
-                or l_str.endswith(":")
-                or l_str.isupper()
-                or l_str.startswith("Q:")
-                or l_str.startswith("A:")
-                or l_str.startswith("ESCALATION")
-            ):
-                continue
-            line_lower = l_str.lower()
-            line_terms = set(re.findall(r"[a-z0-9]+", line_lower))
-            overlap = sum(1 for k in keywords if k in line_terms)
-            if overlap >= min(2, len(keywords)):
-                matched_lines.append(l_str)
-
-    if matched_lines:
-        ans = ". ".join(matched_lines[:2])
-        return clean_for_speech(ans)
-
-    return "I couldn't find a clear answer in the approved information. Let me connect you with a specialist."
+    answer, _ = extract_supported_answer(normalize_query(query), chunks)
+    return clean_for_speech(answer)
 
 
 # ── Fast Gemini LLM Generator with Timeout & Fail-Safe ─────────────────
@@ -608,27 +631,14 @@ Synthesize a direct 2-sentence conversational answer based on the context above:
 
     try:
         logger.info(f"Calling Gemini model: {GEMINI_MODEL}")
-        model = genai.GenerativeModel(GEMINI_MODEL)
-        response = model.generate_content(
-            user_prompt,
-            generation_config=genai.GenerationConfig(
-                temperature=0.2,
-                max_output_tokens=300,
-            ),
+        raw_text = gemini.generate_content(
+            model=GEMINI_MODEL,
+            content=user_prompt,
+            temperature=0.2,
+            max_output_tokens=300,
         )
-        logger.info(f"Gemini response received: {response}")
-
-        if response and hasattr(response, "candidates") and response.candidates:
-            cand = response.candidates[0]
-            if cand.content and cand.content.parts:
-                raw_text = "".join([p.text for p in cand.content.parts if hasattr(p, "text")]).strip()
-                cleaned = parse_voice_answer(raw_text)
-                if cleaned and len(cleaned) > 10:
-                    logger.info(f"Using Gemini answer: {cleaned[:100]}")
-                    return cleaned
-
-        if response and response.text:
-            cleaned = parse_voice_answer(response.text)
+        if raw_text:
+            cleaned = parse_voice_answer(raw_text)
             if cleaned and len(cleaned) > 10:
                 logger.info(f"Using Gemini text answer: {cleaned[:100]}")
                 return cleaned

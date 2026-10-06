@@ -41,7 +41,8 @@ def ingest_pdf(entry: dict) -> bool:
             r = requests.post(
                 f"{INGESTION_URL}/ingest/pdf",
                 files={"file": (entry["file"], f, "application/pdf")},
-                params={"category": entry["category"], "market": entry["market"]},
+                params={"category": entry["category"], "market": entry["market"],
+                        "product": entry.get("product", ""), "agent_eligible": entry.get("agent_eligible", True)},
                 timeout=120,
             )
         r.raise_for_status()
@@ -79,6 +80,8 @@ def ingest_text(entry: dict) -> bool:
                 "title": entry["title"],
                 "category": entry["category"],
                 "market": entry["market"],
+                "product": entry.get("product"),
+                "agent_eligible": entry.get("agent_eligible", True),
             },
             timeout=120,
         )

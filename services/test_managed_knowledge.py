@@ -4,6 +4,7 @@ import os
 import tempfile
 import unittest
 import uuid
+from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 from types import SimpleNamespace
@@ -79,9 +80,9 @@ class KnowledgeTests(unittest.TestCase):
         doc = str(uuid.uuid4())
         def embed(**kwargs):
             return {'embedding': [[1.0] + [0.0] * 3071 for _ in kwargs['content']]}
-        with patch.object(ingestion.genai, 'embed_content', side_effect=embed), TestClient(ingestion.app) as client:
+        with patch.object(ingestion.gemini, 'embed_content', side_effect=embed), TestClient(ingestion.app) as client:
             def upload(content, filename='policy.txt'):
-                return client.put('/documents/' + doc, data={'title': 'Policy'},
+                return client.put('/documents/' + doc, data={'title': 'Policy', 'effective_from': '2020-01-01', 'effective_to': '2099-12-31'},
                                   files={'file': (filename, content)})
             for attempt in range(2):
                 response = upload(b'Contact policy@example.test')
@@ -91,11 +92,20 @@ class KnowledgeTests(unittest.TestCase):
                 self.assertTrue(response.json()['staged'])
                 self.assertEqual(read_snapshot(self.root, 3072)[0].ntotal, attempt)
                 self.assertEqual(client.post('/documents/' + doc + '/publish').status_code, 200)
-            self.assertEqual(len(client.get('/documents/' + doc + '/chunks').json()['chunks']), 1)
+            stored = client.get('/documents/' + doc + '/chunks').json()['chunks']
+            self.assertEqual(len(stored), 1)
+            self.assertEqual(stored[0]['effective_from'], '2020-01-01')
+            self.assertEqual(stored[0]['effective_to'], '2099-12-31')
+            invalid = client.put('/documents/' + str(uuid.uuid4()), data={'title': 'Policy', 'effective_from': '2026-02-31'},
+                                 files={'file': ('policy.txt', b'Policy')})
+            self.assertEqual(invalid.status_code, 422)
+            reversed_window = client.put('/documents/' + str(uuid.uuid4()), data={'title': 'Policy', 'effective_from': '2027-01-01', 'effective_to': '2026-01-01'},
+                                         files={'file': ('policy.txt', b'Policy')})
+            self.assertEqual(reversed_window.status_code, 422)
             self.assertEqual(upload(b'').status_code, 422)
             self.assertEqual(upload(b'not a PDF', 'policy.pdf').status_code, 422)
             self.assertEqual(upload(b'x', 'policy.exe').status_code, 400)
-            with patch.object(ingestion.genai, 'embed_content', side_effect=RuntimeError('provider')):
+            with patch.object(ingestion.gemini, 'embed_content', side_effect=RuntimeError('provider')):
                 self.assertEqual(upload(b'Updated policy').status_code, 503)
             self.assertEqual(read_snapshot(self.root, 3072)[0].ntotal, 1)
             self.assertEqual(client.delete('/documents/' + doc).status_code, 200)
@@ -109,9 +119,10 @@ class KnowledgeTests(unittest.TestCase):
         first, second, unrelated = [str(uuid.uuid4()) for _ in range(3)]
         def embed(**kwargs):
             return {'embedding': [[1.0] + [0.0] * 3071 for _ in kwargs['content']]}
-        with patch.object(ingestion.genai, 'embed_content', side_effect=embed), TestClient(ingestion.app) as client, TestClient(rag.app) as reader:
+        with patch.object(ingestion.gemini, 'embed_content', side_effect=embed), TestClient(ingestion.app) as client, TestClient(rag.app) as reader:
             def upload(doc, family, revision, content):
-                return client.put('/documents/' + doc, data={'title': 'Policy', 'family_id': family, 'revision': revision}, files={'file': ('policy.txt', content)})
+                return client.put('/documents/' + doc, data={'title': 'Policy', 'family_id': family, 'revision': revision,
+                                  'effective_from': '2020-01-01', 'effective_to': '2099-12-31'}, files={'file': ('policy.txt', content)})
             self.assertEqual(upload(first, first, 1, b'Personal loan minimum age is 21 years.').status_code, 200)
             self.assertEqual(client.post('/documents/' + first + '/publish').status_code, 200)
             self.assertEqual(upload(unrelated, unrelated, 1, b'Other policy covers insurance.').status_code, 200)
@@ -133,6 +144,8 @@ class KnowledgeTests(unittest.TestCase):
             self.assertEqual(source['family_id'], first)
             self.assertEqual(source['revision'], 2)
             self.assertEqual(len(source['content_hash']), 64)
+            self.assertEqual(source['effective_from'], '2020-01-01')
+            self.assertEqual(source['effective_to'], '2099-12-31')
             self.assertIn('21 years', client.get('/documents/' + first + '/chunks').json()['chunks'][0]['content'])
             self.assertEqual(upload(second, first, 2, b'Changed behind approval.').status_code, 503)
             self.assertEqual(client.delete('/documents/' + first).status_code, 200)
@@ -149,7 +162,7 @@ class KnowledgeTests(unittest.TestCase):
         content = b'Veyra staged policy content remains private before approval.'
         def embed(**kwargs):
             return {'embedding': [[1.0] + [0.0] * 3071 for _ in kwargs['content']]}
-        with patch.object(ingestion.genai, 'embed_content', side_effect=embed), TestClient(ingestion.app) as client:
+        with patch.object(ingestion.gemini, 'embed_content', side_effect=embed), TestClient(ingestion.app) as client:
             result = client.put('/documents/' + doc, data={'title': 'Staged'},
                                 files={'file': ('staged.txt', content)})
             self.assertEqual(result.status_code, 200, result.text)
@@ -160,7 +173,7 @@ class KnowledgeTests(unittest.TestCase):
             self.assertEqual(published.status_code, 200, published.text)
             self.assertEqual(read_snapshot(self.root, 3072)[0].ntotal, 1)
             self.assertEqual(client.get('/documents/' + doc + '/chunks').json()['chunks'][0]['content'], content.decode())
-            with patch.object(ingestion.genai, 'embed_content', side_effect=AssertionError('Must reuse completed embeddings')):
+            with patch.object(ingestion.gemini, 'embed_content', side_effect=AssertionError('Must reuse completed embeddings')):
                 evidence = self.root / 'managed' / 'revisions' / f'{doc}.json'
                 evidence.unlink()
                 resumed = client.put('/documents/' + doc, data={'title': 'Staged'}, files={'file': ('staged.txt', content)})
@@ -179,6 +192,39 @@ class KnowledgeTests(unittest.TestCase):
             SimpleNamespace(extract_text=lambda: None),
         ])):
             self.assertEqual(ingestion.extract_pdf_text(b'fixture'), '')
+
+    def test_managed_pdf_page_survives_publication_retrieval_and_citation(self):
+        ingestion = service('ingestion-service')
+        ingestion.GEMINI_API_KEY = 'fake-test-key'
+        rag = service('rag-service')
+        document_id = str(uuid.uuid4())
+
+        def embed(**kwargs):
+            return {'embedding': [[1.0] + [0.0] * 3071 for _ in kwargs['content']]}
+
+        pages = SimpleNamespace(pages=[
+            SimpleNamespace(extract_text=lambda: 'Welcome to the approved lending guide.'),
+            SimpleNamespace(extract_text=lambda: ''),
+            SimpleNamespace(extract_text=lambda: 'Cobalt settlement period is 14 days.'),
+        ])
+        with patch.object(ingestion, 'PdfReader', return_value=pages), \
+                patch.object(ingestion.gemini, 'embed_content', side_effect=embed), \
+                TestClient(ingestion.app) as writer, TestClient(rag.app) as reader:
+            response = writer.put('/documents/' + document_id, data={
+                'title': 'Page-aware policy', 'market': 'india', 'product': 'personal-loan',
+            }, files={'file': ('policy.pdf', b'fixture-pdf')})
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()['chunks_added'], 2)
+            staged = writer.get('/documents/' + document_id + '/chunks').json()['chunks']
+            self.assertEqual([chunk['page'] for chunk in staged], [1, 3])
+            self.assertEqual(writer.post('/documents/' + document_id + '/publish').status_code, 200)
+            result = reader.post('/retrieve', json={
+                'query': 'What is the cobalt settlement period?', 'market': 'india',
+                'product': 'personal-loan', 'top_k': 2,
+            }).json()
+            self.assertEqual(result['sources'][0]['document_id'], document_id)
+            self.assertEqual(result['sources'][0]['page'], 3)
+            self.assertIn('14 days', result['sources'][0]['excerpt'])
 
     def test_rag_reload_preserves_legacy_and_fails_closed(self):
         legacy = faiss.IndexFlatIP(3072)
@@ -222,6 +268,11 @@ class KnowledgeTests(unittest.TestCase):
         self.assertIn('couldn\'t find a clear answer', rag.synthesize_direct_knowledge_answer('What is the interest rate?', [india]))
         self.assertEqual(rag.abstention_reason(rag.synthesize_direct_knowledge_answer('What is the interest rate?', [india])), 'insufficient_support')
         self.assertNotIn('70%', rag.synthesize_direct_knowledge_answer('What is the LTV for property?', [india]))
+        self.assertTrue(rag.effective_date_is_eligible({'effective_from': '2026-01-01', 'effective_to': '2026-12-31'}, date(2026, 1, 1)))
+        self.assertTrue(rag.effective_date_is_eligible({'effective_from': '2026-01-01', 'effective_to': '2026-12-31'}, date(2026, 12, 31)))
+        self.assertFalse(rag.chunk_is_eligible({**india, 'effective_from': '2999-01-01'}, 'india', 'personal-loan'))
+        self.assertFalse(rag.chunk_is_eligible({**india, 'effective_to': '2000-01-01'}, 'india', 'personal-loan'))
+        self.assertFalse(rag.chunk_is_eligible({**india, 'effective_from': 'not-a-date'}, 'india', 'personal-loan'))
 
         with TestClient(rag.app) as client:
             self.assertEqual(client.post('/retrieve', json={'query': 'loan', 'market': 'mars'}).status_code, 422)

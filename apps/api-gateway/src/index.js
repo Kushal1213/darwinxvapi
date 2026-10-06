@@ -22,6 +22,8 @@ import healthRoutes from './routes/health.js';
 import nudgeRoutes from './routes/nudges.js';
 import knowledgeRoutes, { startKnowledgeWorker } from './routes/knowledge.js';
 import analyticsRoutes from './routes/analytics.js';
+import handoffRoutes from './routes/handoffs.js';
+import knowledgeGapRoutes from './routes/knowledge-gaps.js';
 import { createAuthentication } from './services/auth.js';
 
 // Socket handler
@@ -67,11 +69,13 @@ app.use('/api/auth', auth.router);
 app.use('/api', auth.requireAuth);
 app.use('/api/team', auth.teamRouter);
 app.use('/api/knowledge', (req, res, next) => ['GET', 'HEAD', 'OPTIONS'].includes(req.method) ? next() : auth.requireAdmin(req, res, next));
+app.use('/api/knowledge/gaps', knowledgeGapRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/rag', ragRoutes);
 app.use('/api/voice', voiceRoutes);
 app.use('/api/nudges', nudgeRoutes);
+app.use('/api/handoffs', handoffRoutes);
 app.use('/api/knowledge', knowledgeRoutes);
 app.use('/api/vapi', vapiConfigRoutes);
 app.use('/api/transcript', transcriptRoutes);

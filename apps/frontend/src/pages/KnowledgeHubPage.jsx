@@ -11,6 +11,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { useWorkspaceAuth } from '../components/WorkspaceAuth';
+import KnowledgeGapsPanel from '../components/KnowledgeGapsPanel';
 import {
   EmptyState,
   LoadingState,
@@ -21,6 +22,7 @@ import {
 const inputClass = 'field';
 const buttonClass = 'btn';
 const markets = ['india', 'philippines', 'indonesia'];
+const agentLabels = { 'india-loan': 'India Loans', 'india-insurance': 'India Insurance', 'ph-bancassurance': 'Philippines', 'id-finance': 'Indonesia' };
 const products = [
   'loan',
   'personal-loan',
@@ -34,6 +36,14 @@ const products = [
 ];
 const productLabel = (value) =>
   value === 'general' ? 'Shared across products' : value.replaceAll('-', ' ');
+const effectiveWindowLabel = (doc) => {
+  if (!doc.effectiveFrom && !doc.effectiveTo) return 'No effective-date limit';
+  if (doc.effectiveFrom && doc.effectiveTo)
+    return `${doc.effectiveFrom} through ${doc.effectiveTo} UTC`;
+  return doc.effectiveFrom
+    ? `Effective from ${doc.effectiveFrom} UTC`
+    : `Effective through ${doc.effectiveTo} UTC`;
+};
 async function api(path, options) {
   const response = await fetch(path, options);
   const data = await response.json();
@@ -47,6 +57,8 @@ export default function KnowledgeHubPage() {
   const canManage = user.role === 'admin';
   const [documents, setDocuments] = useState([]);
   const [jobs, setJobs] = useState([]);
+  const [knowledgeStats, setKnowledgeStats] = useState(null);
+  const [statsError, setStatsError] = useState('');
   const [jobBusy, setJobBusy] = useState(null);
   const [error, setError] = useState('');
   const [listError, setListError] = useState('');
@@ -73,13 +85,16 @@ export default function KnowledgeHubPage() {
 
   async function refresh() {
     try {
-      const [data, queue] = await Promise.all([
+      const [data, queue, stats] = await Promise.all([
         api('/api/knowledge/documents'),
         canManage ? api('/api/knowledge/jobs') : Promise.resolve({ jobs: [] }),
+        api('/api/rag/stats').then((data) => ({ data })).catch((err) => ({ error: err.message })),
       ]);
       if (alive.current) {
         setDocuments(data.documents);
         setJobs(queue.jobs);
+        setKnowledgeStats(stats.data || null);
+        setStatsError(stats.error || '');
         setListError('');
       }
     } catch (err) {
@@ -457,6 +472,9 @@ export default function KnowledgeHubPage() {
                 / {selectedDoc.status} /{' '}
                 {selectedDoc.reviewStatus || 'Legacy review state unavailable'}
               </p>
+              <p className="text-sm text-muted mt-1">
+                {effectiveWindowLabel(selectedDoc)} · {selectedDoc.effectiveStatus}
+              </p>
             </div>
             {actions(selectedDoc)}
           </div>
@@ -499,7 +517,9 @@ export default function KnowledgeHubPage() {
               className="text-sm text-amber-700 dark:text-amber-300"
             >
               {selectedDoc.status === 'publishing'
-                ? 'Approval saved. Publication is pending; check the job status above.'
+                ? selectedDoc.effectiveStatus === 'scheduled'
+                  ? `Approval saved. Publication is scheduled for ${selectedDoc.effectiveFrom} UTC; the current live revision remains available until then.`
+                  : 'Approval saved. Publication is pending; check the job status above.'
                 : 'Withdrawal requested. This revision may remain searchable until the withdrawal job completes.'}
             </p>
           )}
@@ -523,8 +543,9 @@ export default function KnowledgeHubPage() {
                 ) : (
                   <>
                     <p className="text-sm">
-                      Check the content and scope below. Approval replaces the
-                      currently published revision.
+                      Check the content, scope, and effective window below.
+                      Approval publishes immediately or schedules the revision
+                      for its start date while the current revision stays live.
                     </p>
                     <button
                       className={buttonClass}
@@ -609,12 +630,17 @@ export default function KnowledgeHubPage() {
                   </p>
                   {comparison.chunks.length ? (
                     comparison.chunks.map((chunk) => (
-                      <p
+                      <article
                         key={chunk.chunk_id}
-                        className="whitespace-pre-wrap break-words text-sm"
+                        className="space-y-1"
                       >
-                        {chunk.content}
-                      </p>
+                        {chunk.page && (
+                          <p className="text-xs text-muted">PDF page {chunk.page}</p>
+                        )}
+                        <p className="whitespace-pre-wrap break-words text-sm">
+                          {chunk.content}
+                        </p>
+                      </article>
                     ))
                   ) : (
                     <p className="text-sm">
@@ -636,6 +662,9 @@ export default function KnowledgeHubPage() {
                 ) : (
                   selected.chunks.map((chunk) => (
                     <article key={chunk.chunk_id} className="space-y-2">
+                      {chunk.page && (
+                        <p className="text-xs text-muted">PDF page {chunk.page}</p>
+                      )}
                       <p className="whitespace-pre-wrap break-words text-sm">
                         {chunk.content}
                       </p>
@@ -653,7 +682,7 @@ export default function KnowledgeHubPage() {
         <>
           <div className="metrics-strip stats-three">
             {[
-              ['Documents', latest.length],
+              ['Uploaded documents', latest.length],
               [
                 'Published revisions',
                 documents.filter((doc) => doc.status === 'indexed').length,
@@ -672,6 +701,24 @@ export default function KnowledgeHubPage() {
               </div>
             ))}
           </div>
+          <section className="panel p-5 space-y-4" aria-label="Agent knowledge readiness">
+            <h2 className="panel-title">Agent knowledge</h2>
+            {statsError ? <p className="notice notice-warning">Could not check available agent knowledge: {statsError}</p> : knowledgeStats ? <>
+              <div className="flex flex-wrap gap-3">
+                {Object.entries(agentLabels).map(([id, label]) => <span key={id} className="text-sm">
+                  {label}: <StatusBadge tone={knowledgeStats.agent_scopes?.[id] ? 'success' : 'warning'}>{knowledgeStats.agent_scopes?.[id] || 0} usable chunks</StatusBadge>
+                </span>)}
+              </div>
+              <p className="text-sm text-muted">The bundled reference library and published uploads both support agent answers. Mixed-product training material is excluded. Uploads and their approval history are listed below.</p>
+              <details>
+                <summary className="cursor-pointer text-sm">View indexed sources ({knowledgeStats.sources.length})</summary>
+                <div className="table-scroll mt-4"><table className="data-table"><thead><tr><th>Source</th><th>Scope</th><th>Origin</th><th>Usable chunks</th></tr></thead>
+                  <tbody>{knowledgeStats.sources.map((source, index) => <tr key={`${source.source}-${index}`}><td>{source.title || source.source}</td><td>{source.market} · {source.product || 'Unclassified'}</td><td>{source.managed ? 'Published upload' : 'Bundled reference'}</td><td>{source.eligible_chunks} / {source.chunks}</td></tr>)}</tbody>
+                </table></div>
+              </details>
+            </> : <p className="text-sm text-muted">Checking available knowledge…</p>}
+          </section>
+          <KnowledgeGapsPanel canManage={canManage} documents={documents} />
           {canManage && showUpload && (
             <form
               id="knowledge-upload"
@@ -745,6 +792,24 @@ export default function KnowledgeHubPage() {
                     defaultValue={revisionTarget?.category || 'policy'}
                     required
                     maxLength={80}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="text-sm space-y-2">
+                  <span>Effective from (optional, UTC)</span>
+                  <input
+                    name="effectiveFrom"
+                    type="date"
+                    defaultValue={revisionTarget?.effectiveFrom || ''}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="text-sm space-y-2">
+                  <span>Effective through (optional, UTC)</span>
+                  <input
+                    name="effectiveTo"
+                    type="date"
+                    defaultValue={revisionTarget?.effectiveTo || ''}
                     className={inputClass}
                   />
                 </label>
@@ -889,6 +954,9 @@ export default function KnowledgeHubPage() {
                               ? productLabel(doc.product)
                               : 'Unclassified product'}
                           </p>
+                          <p className="text-xs mt-1 text-muted">
+                            {effectiveWindowLabel(doc)}
+                          </p>
                           {doc.rejectionReason && (
                             <p className="text-xs text-red-600 mt-1">
                               Changes requested: {doc.rejectionReason}
@@ -904,7 +972,9 @@ export default function KnowledgeHubPage() {
                         <td className="p-3">
                           <StatusBadge
                             tone={
-                              doc.status === 'indexed'
+                              doc.effectiveStatus === 'expired'
+                                ? 'error'
+                                : doc.status === 'indexed'
                                 ? 'success'
                                 : doc.status === 'failed' ||
                                     doc.reviewStatus === 'rejected'
@@ -919,7 +989,11 @@ export default function KnowledgeHubPage() {
                                     : 'neutral'
                             }
                           >
-                            {doc.reviewStatus === 'rejected'
+                            {doc.effectiveStatus === 'expired'
+                              ? 'Expired'
+                              : doc.status === 'publishing' && doc.effectiveStatus === 'scheduled'
+                                ? 'Scheduled'
+                                : doc.reviewStatus === 'rejected'
                               ? 'Rejected'
                               : doc.status}
                           </StatusBadge>

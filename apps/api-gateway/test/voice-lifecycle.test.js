@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
+import { DatabaseSync } from 'node:sqlite';
 import { io as connectSocket } from 'socket.io-client';
 
 test('voice sessions, handoff, archive and restart', { timeout: 30000 }, async (t) => {
@@ -24,7 +25,12 @@ test('voice sessions, handoff, archive and restart', { timeout: 30000 }, async (
     const { query, text } = parsed;
     if (req.url !== '/retrieve') {
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ nudges: text === 'nudge-trigger' ? [{ signal_type: 'buying_signal', text: 'Offer next steps.', priority: 'LOW', confidence: 0.8 }] : [] }));
+      const nudges = text === 'nudge-trigger'
+        ? [{ signal_type: 'buying_signal', text: 'Offer next steps.', priority: 'LOW', confidence: 0.8 }]
+        : text === 'I need to speak to a supervisor right now'
+          ? [{ signal_type: 'human_escalation', text: 'Prepare the handoff.', priority: 'HIGH', confidence: 0.9 }]
+          : [];
+      res.end(JSON.stringify({ nudges }));
       return;
     }
     requests += 1;
@@ -46,7 +52,7 @@ test('voice sessions, handoff, archive and restart', { timeout: 30000 }, async (
       return;
     }
     res.end(JSON.stringify({ answer: 'Policy answer', sources: query === 'unknown' ? [] : [
-      { source: 'loan-policy', title: 'Loan policy', chunk_id: 'income-1', excerpt: 'Approved income requirements.', score: 0.8 },
+      { source: 'loan-policy', title: 'Loan policy', page: 7, chunk_id: 'income-1', excerpt: 'Approved income requirements.', score: 0.8 },
     ] }));
   });
   mock.listen(0, '127.0.0.1');
@@ -54,6 +60,8 @@ test('voice sessions, handoff, archive and restart', { timeout: 30000 }, async (
   let child;
   let base;
   let cookie = '';
+  let reviewDeliveryId;
+  let knowledgeGapId;
   async function start() {
     const probe = createServer();
     probe.listen(0, '127.0.0.1');
@@ -129,6 +137,7 @@ test('voice sessions, handoff, archive and restart', { timeout: 30000 }, async (
     assert.equal(turn.data.session.status, 'active');
     assert.equal(turn.data.session.state.confidence, null);
     assert.equal(turn.data.sources[0].chunk_id, 'income-1');
+    assert.equal(turn.data.sources[0].page, 7);
     assert.equal(retrieveBodies.at(-1).market, 'india');
     assert.equal(retrieveBodies.at(-1).product, 'loan');
     const repeated = await api('/session', { call_id: 'review-call' });
@@ -155,7 +164,34 @@ test('voice sessions, handoff, archive and restart', { timeout: 30000 }, async (
     assert.equal(turn.data.escalation.last_customer_message, 'I want to talk to a human');
     const repeated = await api('/escalate', { call_id: 'review-call' });
     assert.equal(repeated.data.escalation_id, turn.data.escalation.escalation_id);
+    const inbox = await api('/../handoffs?state=open');
+    assert.equal(inbox.status, 200);
+    assert.equal(inbox.data.total, 1);
+    assert.equal(inbox.data.handoffs[0].escalation_id, turn.data.escalation.escalation_id);
+    assert.equal(inbox.data.handoffs[0].state, 'delivered');
+    reviewDeliveryId = inbox.data.handoffs[0].id;
+    const detail = await api(`/../handoffs/${reviewDeliveryId}`);
+    assert.deepEqual(detail.data.events.map((event) => event.action), ['requested', 'delivered']);
+    const acknowledged = await api(`/../handoffs/${reviewDeliveryId}/acknowledge`, {});
+    assert.equal(acknowledged.data.state, 'acknowledged');
+    assert.ok(acknowledged.data.events.at(-1).actor_id);
+    assert.equal((await api(`/../handoffs/${reviewDeliveryId}/acknowledge`, {})).data.events.length, 3);
     assert.equal((await api('/escalate', { call_id: 'missing' })).status, 404);
+  });
+
+  await t.test('immediate human handoff still reaches the live nudge detector', async () => {
+    const before = requests;
+    const turn = await api('/query', { call_id: 'handoff-nudge', query: 'I need to speak to a supervisor right now' });
+    assert.equal(turn.status, 200);
+    assert.equal(requests, before);
+    let nudges = [];
+    for (let attempt = 0; attempt < 20 && !nudges.length; attempt += 1) {
+      nudges = (await api('/../nudges?call_id=handoff-nudge')).data.nudges;
+      if (!nudges.length) await delay(20);
+    }
+    assert.equal(nudges.length, 1);
+    assert.equal(nudges[0].type, 'human_escalation');
+    await api('/session/handoff-nudge/end', {});
   });
 
   await t.test('ended calls are archived, removed from live view and cannot reopen', async () => {
@@ -171,22 +207,63 @@ test('voice sessions, handoff, archive and restart', { timeout: 30000 }, async (
     assert.equal((await api('/session', { call_id: 'review-call' })).status, 409);
     await api('/webhook', { message: { type: 'transcript', call: { id: 'review-call' }, role: 'user', transcript: 'late', transcriptType: 'final' } });
     assert.equal((await api('/session/review-call')).data.turns.length, 4);
+    assert.equal((await api(`/../handoffs/${reviewDeliveryId}`)).data.state, 'acknowledged');
+    assert.equal((await api(`/../handoffs/${reviewDeliveryId}/resolve`, {})).status, 400);
+    const resolved = await api(`/../handoffs/${reviewDeliveryId}/resolve`, { resolution: 'Supervisor contacted the customer and recorded the next step.' });
+    assert.equal(resolved.data.state, 'resolved');
+    assert.equal(resolved.data.events.at(-1).action, 'resolved');
+    assert.equal((await api(`/../handoffs/${reviewDeliveryId}/resolve`, { resolution: 'Duplicate retry' })).data.events.length, 4);
   });
 
-  await t.test('missing knowledge escalates without inventing confidence', async () => {
+  await t.test('greetings and missing knowledge remain recoverable in the same call', async () => {
+    const before = requests;
+    const greeting = await api('/query', { call_id: 'unsupported', query: 'Hello' });
+    assert.equal(greeting.data.response_kind, 'conversation');
+    assert.equal(requests, before);
     const result = await api('/query', { call_id: 'unsupported', query: 'unknown' });
-    assert.equal(result.data.escalation.reason, 'No supporting knowledge was retrieved');
+    assert.equal(result.data.escalation, null);
     assert.match(result.data.answer, /could not find supporting knowledge/);
-    assert.equal(result.data.session.status, 'escalated');
+    assert.doesNotMatch(result.data.answer, /has been recorded/);
+    assert.equal(result.data.session.status, 'active');
+    assert.equal(result.data.abstention_reason, 'insufficient_support');
+    const repeatedGap = await api('/query', { call_id: 'unsupported', query: 'unknown' });
+    assert.equal(repeatedGap.data.abstention_reason, 'insufficient_support');
+    const gapInbox = await api('/../knowledge/gaps?status=active');
+    assert.equal(gapInbox.status, 200);
+    assert.equal(gapInbox.data.total, 1);
+    assert.equal(gapInbox.data.gaps[0].occurrence_count, 2);
+    assert.equal(gapInbox.data.gaps[0].question_excerpt, 'unknown');
+    knowledgeGapId = gapInbox.data.gaps[0].id;
+    const triaged = await api(`/../knowledge/gaps/${knowledgeGapId}/actions`, { status: 'triaged' });
+    assert.equal(triaged.data.status, 'triaged');
+    assert.ok(triaged.data.events.at(-1).actor_id);
+    const closed = await api(`/../knowledge/gaps/${knowledgeGapId}/actions`, { status: 'out_of_scope', note: 'Not part of the approved pilot scope.' });
+    assert.equal(closed.data.status, 'out_of_scope');
+    const reopened = await api('/query', { call_id: 'unsupported', query: 'unknown' });
+    assert.equal(reopened.data.abstention_reason, 'insufficient_support');
+    const reopenedGap = await api(`/../knowledge/gaps/${knowledgeGapId}`);
+    assert.equal(reopenedGap.data.status, 'reopened');
+    assert.equal(reopenedGap.data.occurrence_count, 3);
+    assert.equal(reopenedGap.data.resolution_note, null);
+    assert.equal((await api(`/../knowledge/gaps/${knowledgeGapId}/actions`, { status: 'resolved', note: 'Covered' })).status, 400);
+    assert.equal((await api(`/../knowledge/gaps/${knowledgeGapId}/actions`, { status: 'invalid' })).status, 400);
+    const recovered = await api('/query', { call_id: 'unsupported', query: 'loan income' });
+    assert.equal(requests, before + 4);
+    assert.equal(recovered.data.answer, 'Policy answer');
+    assert.equal(recovered.data.sources[0].source, 'loan-policy');
+    assert.equal(recovered.data.session.escalations.length, 0);
     await api('/session/unsupported/end', {});
+    assert.equal((await api('/session/unsupported')).data.outcome, 'completed');
   });
 
-  await t.test('retrieval abstention escalates even when candidates were retrieved', async () => {
+  await t.test('unsupported candidates are not displayed as citations or treated as a handoff', async () => {
     const result = await api('/query', { call_id: 'abstained', query: 'unsupported-with-source' });
     assert.equal(result.status, 200);
-    assert.equal(result.data.escalation.reason, 'insufficient_support');
-    assert.equal(result.data.session.status, 'escalated');
-    assert.equal(result.data.session.turns.at(-1).sources.length, 1);
+    assert.equal(result.data.escalation, null);
+    assert.equal(result.data.abstention_reason, 'insufficient_support');
+    assert.equal(result.data.session.status, 'active');
+    assert.equal(result.data.session.turns.at(-1).sources.length, 0);
+    assert.equal(result.data.sources.length, 0);
     await api('/session/abstained/end', {});
   });
 
@@ -221,24 +298,55 @@ test('voice sessions, handoff, archive and restart', { timeout: 30000 }, async (
     assert.deepEqual(events.map((event) => event.action), ['created', 'acknowledged', 'useful']);
     assert.ok(events[1].actor_id);
     const history = await api('/history?limit=1&offset=0');
-    assert.equal(history.data.total, 5);
+    assert.equal(history.data.total, 6);
     assert.equal(history.data.calls.length, 1);
     assert.equal(history.data.calls[0].turns, undefined);
     assert.equal((await api('/session/review-call')).data.escalations.length, 1);
+    assert.equal((await api(`/../handoffs/${reviewDeliveryId}`)).data.state, 'resolved');
+    const persistedGap = await api(`/../knowledge/gaps/${knowledgeGapId}`);
+    assert.equal(persistedGap.data.occurrence_count, 3);
+    assert.equal(persistedGap.data.status, 'reopened');
     assert.equal((await api('/history?limit=-1')).status, 400);
     assert.equal((await api('/history?offset=0.5')).status, 400);
     const live = (await api('/live')).data.calls;
     assert.equal(live.length, 1);
     assert.equal(live[0].call_id, 'recover-active');
-    assert.equal((await api('/session/recover-active')).data.turns.length, 2);
+    const recoveredSession = (await api('/session/recover-active')).data;
+    assert.equal(recoveredSession.turns.length, 2);
+    assert.equal(recoveredSession.turns[1].sources[0].page, 7);
     const resumed = await api('/query', { call_id: 'recover-active', query: 'loan amount' });
     assert.equal(resumed.data.session.turns.length, 4);
     await api('/session/recover-active/end', {});
   });
 
+  await t.test('old automatic handoffs recover after restart while explicit handoffs remain paused', async () => {
+    const original = await api('/query', { call_id: 'legacy-gap', query: 'unknown' });
+    const session = original.data.session;
+    session.status = 'escalated';
+    session.escalations = [{ escalation_id: 'old-automatic', reason: 'no_eligible_candidates', timestamp: new Date().toISOString() }];
+    await stop();
+    const db = new DatabaseSync(join(directory, 'test.sqlite'));
+    db.prepare('UPDATE calls SET status = ?, payload = ? WHERE id = ?').run('escalated', JSON.stringify(session), 'legacy-gap');
+    db.close();
+    await start();
+    const recovered = await api('/query', { call_id: 'legacy-gap', query: 'loan income' });
+    assert.equal(recovered.data.answer, 'Policy answer');
+    assert.equal(recovered.data.session.status, 'active');
+    assert.ok(recovered.data.session.escalations[0].resolved_at);
+    const handoff = await api('/query', { call_id: 'legacy-gap', query: 'I want to talk to a human' });
+    assert.equal(handoff.data.session.escalations.length, 2);
+    const before = requests;
+    const paused = await api('/query', { call_id: 'legacy-gap', query: 'loan income' });
+    assert.equal(requests, before);
+    assert.equal(paused.data.escalation.escalation_id, handoff.data.escalation.escalation_id);
+    await api('/session/legacy-gap/end', {});
+    assert.equal((await api('/session/legacy-gap')).data.outcome, 'human_handoff_requested');
+  });
+
   await t.test('authentication protects reads, mutations and rejects cross-origin requests', async () => {
     assert.equal((await fetch(`${base}/history`)).status, 401);
     assert.equal((await fetch(base.replace('/voice', '/nudges'))).status, 401);
+    assert.equal((await fetch(base.replace('/voice', '/handoffs'))).status, 401);
     const crossOrigin = await fetch(`${base}/session`, { method: 'POST', headers: { Cookie: cookie, Origin: 'https://untrusted.example', 'Content-Type': 'application/json' }, body: '{}' });
     assert.equal(crossOrigin.status, 403);
     const authBase = base.replace('/voice', '/auth');

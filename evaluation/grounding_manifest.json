@@ -1,5 +1,5 @@
 {
-  "version": "2026-09-26-fixture-1",
+  "version": "2026-10-06-fixture-2",
   "mode": "fixture-lexical",
   "description": "Provider-free grounding checks for market, product, publication, and abstention behavior. This is a starter release gate, not a production accuracy claim.",
   "cases": [
@@ -54,6 +54,16 @@
       "expected_action": "abstain",
       "forbidden_sources": ["fixture-draft-loan-policy"],
       "risk_category": "unpublished-source",
+      "reviewer": "fixture-reviewer"
+    },
+    {
+      "id": "abstain-expired-source",
+      "question": "What is the expired cobalt loan fee?",
+      "market": "india",
+      "product": "loan",
+      "expected_action": "abstain",
+      "forbidden_sources": ["fixture-expired-loan-policy"],
+      "risk_category": "expired-source",
       "reviewer": "fixture-reviewer"
     },
     {

@@ -3,12 +3,12 @@
 import { getDatabase } from './database.js';
 
 export const MAX_ATTEMPTS = 3;
-export function enqueueKnowledgeJob(doc, kind, actorId) {
+export function enqueueKnowledgeJob(doc, kind, actorId, { notBefore = Date.now() } = {}) {
   const now = Date.now();
   const db = getDatabase();
   const id = db.prepare(`INSERT INTO knowledge_jobs
     (document_id, family_id, kind, actor_id, approval_id, next_attempt_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(doc.id, doc.familyId || doc.id, kind, actorId, doc.approvalId || null, now, now, now).lastInsertRowid;
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(doc.id, doc.familyId || doc.id, kind, actorId, doc.approvalId || null, notBefore, now, now).lastInsertRowid;
   return Number(id);
 }
 export function pendingKnowledgeJobs() {

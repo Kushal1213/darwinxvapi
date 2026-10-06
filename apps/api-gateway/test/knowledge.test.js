@@ -84,18 +84,24 @@ test('knowledge upload, failure, retry, archive, access and persistence', { time
     }
     throw new Error('Job did not reach terminal failure');
   }
-  function form(filename = 'policy.txt') {
+  function form(filename = 'policy.txt', dates = { effectiveFrom: '2020-01-01', effectiveTo: '2099-12-31' }) {
     const data = new FormData();
     data.append('file', new Blob(['Policy text']), filename);
     data.append('title', 'Policy'); data.append('market', 'india'); data.append('category', 'policy');
     data.append('product', 'loan');
+    if (dates.effectiveFrom) data.append('effectiveFrom', dates.effectiveFrom);
+    if (dates.effectiveTo) data.append('effectiveTo', dates.effectiveTo);
     return data;
   }
+  assert.equal((await request('', { method: 'POST', body: form('policy.txt', { effectiveFrom: '2027-01-01', effectiveTo: '2026-01-01' }) })).status, 400);
   assert.equal((await request('', { method: 'POST', body: form('bad.exe') })).status, 400);
   assert.equal((await request('', { method: 'POST', body: form(), headers: { Origin: 'https://evil.test' } })).status, 403);
   const upload = await request('', { method: 'POST', body: form() });
   assert.equal(upload.status, 202);
-  let id = (await upload.json()).document.id;
+  const uploadedDocument = (await upload.json()).document;
+  let id = uploadedDocument.id;
+  assert.equal(uploadedDocument.effectiveFrom, '2020-01-01');
+  assert.equal(uploadedDocument.effectiveTo, '2099-12-31');
   const firstId = id;
   async function until(status, target = id) {
     for (let i = 0; i < 80; i++) {
@@ -154,6 +160,8 @@ test('knowledge upload, failure, retry, archive, access and persistence', { time
   const restored = (await restore.json()).document;
   assert.equal(restored.revision, 2);
   assert.equal(restored.product, 'loan');
+  assert.equal(restored.effectiveFrom, '2020-01-01');
+  assert.equal(restored.effectiveTo, '2099-12-31');
   assert.equal(restored.familyId, firstId);
   assert.notEqual(restored.id, firstId);
   id = restored.id;
@@ -266,4 +274,22 @@ test('knowledge upload, failure, retry, archive, access and persistence', { time
   await until('ready', blockingId);
   await stop(); await start();
   assert.equal((await (await jobRequest()).json()).jobs.find(job => job.id === queuedJob.id).state, 'cancelled');
+
+  // Future-approved knowledge is scheduled without calling publication early.
+  const futureUpload = await request('', { method: 'POST', body: form('future.txt', { effectiveFrom: '2999-01-01', effectiveTo: '2999-12-31' }) });
+  assert.equal(futureUpload.status, 202);
+  const futureId = (await futureUpload.json()).document.id;
+  await until('ready', futureId);
+  const publishesBeforeSchedule = publishes;
+  const futureApproval = await approve(futureId);
+  assert.equal(futureApproval.status, 202);
+  const futureJobId = (await futureApproval.json()).jobId;
+  const futureJob = (await (await jobRequest()).json()).jobs.find(job => job.id === futureJobId);
+  assert.ok(futureJob.next_attempt_at > Date.now());
+  const scheduled = await until('publishing', futureId);
+  assert.equal(scheduled.effectiveStatus, 'scheduled');
+  await delay(100);
+  assert.equal(publishes, publishesBeforeSchedule);
+  assert.equal((await request('/' + futureId + '/archive', { method: 'POST' })).status, 202);
+  await until('archived', futureId);
 });

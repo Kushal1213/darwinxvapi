@@ -12,5 +12,5 @@ if name == 'ingestion-service':
     module.GEMINI_API_KEY = 'browser-fixture-not-a-real-key'
     def embed(**kwargs):
         return {'embedding': [[1.0] + [0.0] * 3071 for _ in kwargs['content']]}
-    module.genai.embed_content = embed
+    module.gemini.embed_content = embed
 uvicorn.run(module.app, host='127.0.0.1', port=int(sys.argv[2]))

@@ -10,6 +10,8 @@ Veyra is a knowledge-grounded voice intelligence platform for customer conversat
 - Streams transcripts and insights to a live mission-control view.
 - Supports localized agents for India, the Philippines, and Indonesia.
 - Provides knowledge, analytics, architecture, and service-health views for operators.
+- Delivers explicit human-assistance requests to a durable internal inbox with acknowledgement, resolution, and audit history.
+- Groups repeated retrieval abstentions into a knowledge-owner triage inbox.
 
 ## Product Areas
 
@@ -19,7 +21,8 @@ Veyra is a knowledge-grounded voice intelligence platform for customer conversat
 | Voice Studio | Live customer-agent conversations with RAG citations |
 | Live Insights | Transcript monitoring, signal detection, and agent nudges |
 | Call History | Completed conversations, source citations, and handoff review |
-| Knowledge Hub | Source-document discovery and grounding visibility |
+| Handoff Inbox | Delivered, acknowledged, and resolved human-assistance work |
+| Knowledge Hub | Controlled publication, grounding visibility, and knowledge-gap triage |
 | Analytics | Conversation and retrieval performance views |
 | Architecture | Runtime topology and service relationships |
 
@@ -141,10 +144,13 @@ duplicate suppression, and the feedback API.
 
 End a voice call or select **End Session** after a text conversation, then open
 **Call History** to review the transcript, citations, and any human handoff request.
+Explicit requests are atomically delivered to **Handoff Inbox**, where an operator
+can acknowledge and resolve them after the call ends. Internal inbox delivery is
+not presented as a completed phone transfer or external-provider acknowledgement.
 Active and completed calls persist in SQLite across gateway restarts. Set
 `VEYRA_DATABASE_PATH` to override `data/veyra.sqlite`. Existing JSON archives in
 `data/calls/` (or `CALL_HISTORY_DIR`) are imported once without deleting originals.
-The installation currently supports one workspace and its owner account.
+The installation supports one workspace with admin and operator accounts.
 
 See [the session contract](docs/CALL_SESSION_CONTRACT.md) for lifecycle rules,
 API endpoints, and current limitations.
@@ -160,6 +166,17 @@ review URLs can be bookmarked and support browser Back/Forward.
 
 See [analytics definitions](docs/ANALYTICS.md) for cohort boundaries, sample counts,
 and limitations. Citation presence is not a measure of answer correctness.
+
+## Use Cases and Next Releases
+
+The first local slices of delivered human handoff and the knowledge-gap inbox are
+implemented. The prioritized product plan also covers external handoff connectors,
+evidence-linked summaries, QA review, customer-owned disclosure checklists, knowledge
+change impact, and operational kill switches. See the
+[use-case implementation plan](docs/USE_CASE_IMPLEMENTATION_PLAN.md) for dependencies,
+acceptance criteria, estimates, and release sequencing. See the
+[release status](docs/RELEASE_STATUS.md) for the boundary between verified local
+capabilities and external launch prerequisites.
 
 ## Grounding Evaluation
 
@@ -216,20 +233,26 @@ Never commit `.env` or provider credentials.
 GET  /api/health
 POST /api/voice/query
 POST /api/rag/query
+GET  /api/handoffs
+POST /api/handoffs/:id/acknowledge
+POST /api/handoffs/:id/resolve
+GET  /api/knowledge/gaps
 ```
 
 ### RAG service
 
 ```text
 GET  /health
-POST /query
+POST /retrieve
 ```
 
 ### Ingestion service
 
 ```text
 GET  /health
-POST /ingest
+POST /ingest/pdf
+POST /ingest/url
+POST /ingest/text
 ```
 
 Interactive FastAPI documentation is available at `/docs` on each Python service while it is running.

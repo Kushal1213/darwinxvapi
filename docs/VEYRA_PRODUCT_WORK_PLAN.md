@@ -1,7 +1,11 @@
 # Veyra Product Work Plan
 
 Research revision: 2026-09-26
+Implementation status reviewed: 2026-10-06
 Status: active product plan; use as guidance and validate priorities against product evidence.
+
+Detailed workflow portfolio and proposed implementation slices:
+[Use Cases and Implementation Plan](USE_CASE_IMPLEMENTATION_PLAN.md).
 
 ## Purpose and Decision Summary
 
@@ -22,23 +26,24 @@ Important changes from the previous plan:
 
 | Area | Implemented locally | Remaining gap |
 | --- | --- | --- |
-| Calls | Shared lifecycle, persistence, review, citations, explicit handoff requests | Provider delivery/acknowledgement of handoffs and live voice reliability |
+| Calls | Shared lifecycle, persistence, review, citations, and durable internal handoff delivery/acknowledgement/resolution | External connector delivery and live voice reliability |
 | Workspace | SQLite users/sessions, admin/operator permissions, invitations, disabling | Recovery, MFA/SSO, permission review, customer deployment |
 | Nudges | Persistence, expiry, duplicate suppression, feedback, audit events | Measured usefulness, signal-quality evaluation, production delivery behavior |
-| Knowledge | Immutable content revisions, product scopes, review/history, independent approval, durable jobs/retries, withdrawal fencing, revision citations | Effective dates, separate worker supervision, page citations, explicit legacy corpus review |
+| Knowledge | Immutable revisions, effective windows, approval/publication jobs, revision/page citations, and grouped knowledge-gap triage | Separate worker supervision, automatic gap regression, retention, and explicit legacy corpus review |
 | Tenant boundary | Independent local stacks and storage; cross-stack tests | Private production networks, container/VM boundaries, per-tenant operations |
-| Retrieval | FAISS plus lexical fallback; source records returned; market/product hard filters | Answer support checks, calibrated abstention, reviewed wrong-market corpus |
-| Analytics | Existing UI and some captured product events | AnalyticsPage still uses static metrics; no validated pilot ROI |
-| Verification | Previous implementation run reported 21 gateway + 4 Python + 2 tenant tests | These were not rerun during this planning-only revision; live-provider quality is unproven |
+| Retrieval | FAISS plus lexical fallback; market/product hard filters; attributed evidence extraction and explicit abstention | Customer-reviewed isolation/support corpus and calibrated thresholds |
+| Analytics | Persisted workspace metrics, distinct sample counts, unavailable states, filters, and CSV export | No validated pilot ROI or live-provider performance baseline |
+| Providers | Maintained `google-genai` SDK adapter, pinned dependencies, and provider-free contract tests | Account/region availability, limits, terms, and authorized live smoke tests |
+| Verification | 31 gateway + 19 Python + 2 tenant tests, seven-case grounding gate, provider inventory test, and frontend production build passed on 2026-10-06 | Live-provider quality and customer-reviewed corpus remain unproven |
 
 Evidence inspected for this revision:
 
 - [RAG service](../services/rag-service/main.py): market/product filters are now hard eligibility checks; answer synthesis and corpus quality still need reviewed evaluation.
-- [Knowledge routes](../apps/api-gateway/src/routes/knowledge.js): successful processing immediately marks indexed; background work is not a durable queue.
+- [Knowledge routes](../apps/api-gateway/src/routes/knowledge.js): processing, review, and publication are separate; durable jobs recover uploads, publication, and withdrawal, including future-effective scheduling.
 - [Analytics](../apps/frontend/src/pages/AnalyticsPage.jsx): fixed accuracy, PII, latency, language, and volume values.
-- [Ingestion](../services/ingestion-service/main.py): legacy google.generativeai integration and heuristic PII detection.
+- [Gemini provider](../services/gemini_provider.py): maintained SDK adapter preserves the existing embedding model/dimension; heuristic PII detection remains separate and is not a compliance control.
 - [Knowledge contract](KNOWLEDGE_DOCUMENTS.md), [team contract](TEAM_ACCESS.md), and [tenant contract](TENANT_STACKS.md): operational limits.
-- Contract documents can lag implementation. In particular, the knowledge contract's older tenant-isolation wording should be reconciled with the dedicated-stack contract during a future documentation pass; shared-process isolation remains absent.
+- Shared-process tenant isolation remains absent; dedicated stacks are the supported local boundary.
 
 ## Research Findings
 
@@ -77,7 +82,11 @@ No customer name, team size, cloud provider, retention duration, or commercial p
 
 ## Ordered Work Packages
 
-All work below is planned, not implemented. Owner labels are responsibilities to assign, not existing staffing commitments. Effort is a rough engineering planning range for a familiar codebase; external review/procurement time is excluded.
+The work-package text below preserves the original planning intent. The current-baseline
+table and implementation-progress sections are authoritative for completed local work.
+Owner labels are responsibilities to assign, not existing staffing commitments. Effort
+is a rough engineering planning range for a familiar codebase; external review/procurement
+time is excluded.
 
 | ID | Priority | Work package | Dependency | Accountable role | Rough effort |
 | --- | --- | --- | --- | --- | --- |
@@ -117,7 +126,7 @@ Acceptance:
 Planned work:
 
 - Inventory SDK versions, model IDs, account/region availability, input limits, timeouts, and provider data-handling terms without exposing secrets. A local no-secrets provider inventory command now covers SDK/model references and dependency pins; account availability, limits, terms, and live smoke tests remain pending.
-- Migrate legacy Google Python integration to the maintained SDK behind focused contract tests.
+- Migrate legacy Google Python integration to the maintained SDK behind focused contract tests. Implemented locally with `google-genai==2.28.0`; authorized live-account validation remains pending.
 - Keep the existing embedding model/dimension unless an evaluated migration is justified. Same dimension alone does not make vectors from different models comparable.
 - If changing embeddings: record model/dimension/chunker identity, rebuild a separate index generation, evaluate, and retain a rollback path.
 - Run fresh Node and Python dependency audits, classify runtime exposure, and prioritize exploitable high-severity issues before external access.
@@ -249,7 +258,7 @@ If these inputs are unavailable, continue synthetic evaluation and design only; 
 
 On each future milestone, update status, evidence, unresolved risks, and the next gate rather than appending another unprioritized feature list. Track tests run, fixture versus provider coverage, corpus/model versions, and migration/rollback requirements.
 
-This revision changed only this work-plan document. Existing implementation history below is retained as historical context, not a fresh certification of correctness or readiness.
+The 2026-09-26 planning revision changed only this work-plan document. Existing implementation history below is retained as historical context, not a fresh certification of correctness or readiness.
 
 ## Implementation Progress - 2026-09-26
 
@@ -340,7 +349,7 @@ Historical limits at the seventh milestone: staged records were not yet immutabl
 - Retrieval and completed-call citations retain revision identity. Existing records are treated as standalone v1 without manufacturing approval.
 - Verification: 28 gateway tests, 9 Python tests, frontend build, and isolated desktop/mobile browser checks with synthetic embeddings. Failure injection covers snapshot-write failure and idempotent publication retry.
 
-Remaining at this milestone: effective dates, product metadata, rollback selection, legacy corpus review, and durable recovery. The follow-up below implements product metadata and the first durable recovery path. Live-provider quality remains unverified.
+Remaining at this milestone: rollback selection, legacy corpus review, and durable recovery. Later follow-ups implement product metadata, effective windows, and the first durable recovery path. Live-provider quality remains unverified.
 
 ### Working-flow and recovery milestone — 2026-09-27
 
@@ -351,7 +360,25 @@ Remaining at this milestone: effective dates, product metadata, rollback selecti
 - Query validation reports input errors instead of outages. Whole-word age/fee matching fixes supported short-term questions, and empty knowledge returns an explicit abstention.
 - Verification includes gateway restart during remote publication, retry exhaustion/manual retry, late completion after withdrawal, cancellation persistence, manifest-write failure, and wrong-product exclusion in both retrieval modes. Browser checks cover upload/approval, product filtering, a grounded text conversation, and persisted revision citations.
 
-Still open for P0-D: a separately supervised worker, distributed leases/heartbeats if process concurrency is introduced, retained-storage quotas/cleanup, and backup/restore reconciliation. The current worker requires one gateway and one ingestion writer per dedicated stack. Effective dates, live-provider reliability, corpus review, and deployment gates remain open.
+Still open for P0-D: a separately supervised worker, distributed leases/heartbeats if process concurrency is introduced, retained-storage quotas/cleanup, and backup/restore reconciliation. The current worker requires one gateway and one ingestion writer per dedicated stack. Live-provider reliability, corpus review, and deployment gates remain open.
+
+### Effective-window milestone — 2026-10-06
+
+- Knowledge revisions accept optional inclusive UTC `effectiveFrom` and `effectiveTo` dates, validate real calendar dates and ordering, and retain them as immutable chunk and citation metadata.
+- Approval of a future revision schedules its durable publication job for the start of the effective date while preserving the current live revision. Already-expired revisions cannot be approved.
+- Both vector and lexical retrieval fail closed for future, expired, or malformed effective metadata. Undated legacy content remains eligible under the existing compatibility contract.
+- Knowledge Hub exposes effective windows and scheduled/expired states. Fixture tests cover validation, scheduled publication, boundary inclusivity, citation propagation, and exclusion outside the window.
+
+Still open: time-of-day and locale-specific activation, automatic rollback or successor selection, and an independently supervised scheduler. Published chunks may remain in immutable snapshots after expiry, but retrieval eligibility no longer permits them to support new answers.
+
+### PDF page-citation milestone — 2026-10-06
+
+- Managed PDF extraction now creates page-bounded chunks with stable one-based physical page numbers; blank pages remain absent without shifting later citations.
+- Page metadata survives staging, immutable publication snapshots, RAG support selection, gateway call persistence, and restart recovery.
+- Knowledge review, Voice Studio, and Call History display the supporting PDF page beside the exact excerpt and revision identity.
+- An end-to-end fixture publishes a PDF, retrieves a fact unique to page 3, and verifies the returned page and excerpt. Previously indexed PDFs remain immutable and require a new revision to gain page metadata.
+
+Still open: OCR for scanned PDFs, printed-label mapping when it differs from the physical PDF page, and bounding-box or highlight coordinates.
 
 ## Definition of Product Progress
 

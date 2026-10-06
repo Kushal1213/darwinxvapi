@@ -36,7 +36,7 @@ reopen or change an archived call.
 
 ## API
 
-These endpoints require the workspace owner's authenticated cookie session.
+These endpoints require an authenticated admin or operator cookie session.
 Browser mutations must carry an allowed Origin. See [workspace access](WORKSPACE_ACCESS.md).
 
 | Endpoint | Result |
@@ -48,6 +48,10 @@ Browser mutations must carry an allowed Origin. See [workspace access](WORKSPACE
 | `POST /api/voice/session/:id/end` | Archive the call, then remove it from live monitoring |
 | `GET /api/voice/history?limit=20&offset=0` | Newest completed calls first; `calls` and `total` |
 | `GET /api/voice/session/:id` | Full live or archived session, including transcript and citations |
+| `GET /api/handoffs?state=open` | Durable internal inbox, ordered by priority and request time |
+| `GET /api/handoffs/:id` | Delivery context and append-only event history |
+| `POST /api/handoffs/:id/acknowledge` | Record recipient acknowledgement idempotently |
+| `POST /api/handoffs/:id/resolve` | Close an open delivery with a required resolution note |
 
 History accepts an integer limit from 1 to 100 and a nonnegative integer offset.
 List entries omit `turns` and include `turn_count`. Detail entries contain:
@@ -63,12 +67,20 @@ List entries omit `turns` and include `turn_count`. Detail entries contain:
 ## Handoff Behavior
 
 Explicit human requests and complaints trigger handoff before calling retrieval.
-An empty source result also records a handoff. Repeated requests return the
-existing handoff, preserving the original context. Subsequent queries acknowledge
-the recorded request rather than continuing automated product answers.
+Unsupported retrieval creates a knowledge gap and a clarification response, not a
+human handoff. Repeated handoff requests return the existing handoff, preserving the
+original context. Subsequent queries acknowledge the recorded request rather than
+continuing automated product answers.
 
-Handoff records are requests for operator follow-up, not confirmed phone transfers.
-Automatic triggers currently use English keywords; market-specific intent handling,
+The call snapshot and internal-inbox delivery are written in one SQLite transaction.
+The escalation ID is the delivery idempotency key. Existing explicit escalations are
+reconciled into the inbox on first access, unresolved deliveries survive call completion,
+and acknowledge/resolve events include the acting account. `delivered` means the
+workspace inbox accepted the item; it is not a confirmed phone transfer.
+
+External connector delivery, retry/failure states, and provider callbacks require a
+customer-selected destination and are not implemented. Automatic intent triggers
+currently use English keywords; market-specific intent handling,
 negative-intent handling, repeated-frustration policies and calibrated confidence
 thresholds are still pending. `state.confidence` is null because retrieval similarity
 scores are not calibrated probabilities.
@@ -77,8 +89,8 @@ Retrieval uses hard eligibility filters. RAG returns only chunks in the requeste
 canonical market and matching requested product family when product metadata is
 present. It may return fewer than the requested `top_k` chunks, including zero.
 The RAG response reports `retrieval_mode` and `abstention_reason`; the gateway
-escalates abstentions instead of treating retrieved but unsupported chunks as an
-answer.
+records eligible abstentions in the knowledge-gap inbox instead of treating retrieved
+but unsupported chunks as an answer.
 
 ## Storage Boundary
 
@@ -94,8 +106,9 @@ dropping history. Restart after correcting an invalid archive to retry.
 
 This is a single-gateway, single-workspace database. Active state is also cached
 in memory; multiple gateway writers are unsupported. Browser microphone sessions
-are not automatically reconnected after a restart. Tenant isolation, team roles,
-retention/deletion, and provider-call reconciliation remain future work.
+are not automatically reconnected after a restart. Retention/deletion and
+provider-call reconciliation remain future work. Team roles and isolated dedicated-stack
+provisioning exist, but shared-process tenancy does not.
 
 ## Verification
 
