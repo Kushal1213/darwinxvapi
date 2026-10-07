@@ -1,7 +1,10 @@
-import { mkdirSync, readFileSync, writeFileSync, existsSync, realpathSync, openSync, closeSync, unlinkSync } from 'node:fs';
-import { resolve, join, dirname } from 'node:path';
+import {
+  closeSync, copyFileSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync,
+  readdirSync, realpathSync, renameSync, rmSync, unlinkSync, writeFileSync,
+} from 'node:fs';
+import { resolve, join, dirname, isAbsolute, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { createServer } from 'node:net';
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -18,6 +21,120 @@ function location(id, root) {
   const directory = join(resolve(root), id);
   if (existsSync(directory) && realpathSync(directory) !== directory) throw new Error('Tenant directories cannot be symbolic links.');
   return directory;
+}
+
+function requireStopped(directory) {
+  if (existsSync(join(directory, 'runtime.lock'))) {
+    throw new Error('Tenant has a runtime lock. Stop it and inspect stale locks before operating on storage.');
+  }
+}
+
+function walkFiles(root, directory = root) {
+  const files = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isSymbolicLink()) throw new Error('Tenant backups cannot contain symbolic links.');
+    if (entry.isDirectory()) files.push(...walkFiles(root, path));
+    else if (entry.isFile()) files.push(relative(root, path).split(sep).join('/'));
+    else throw new Error('Tenant backups support regular files and directories only.');
+  }
+  return files.sort();
+}
+
+function digest(path) {
+  return createHash('sha256').update(readFileSync(path)).digest('hex');
+}
+
+function copyTree(source, destination) {
+  mkdirSync(destination, { recursive: true, mode: 0o700 });
+  for (const name of walkFiles(source)) {
+    const target = join(destination, ...name.split('/'));
+    mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
+    copyFileSync(join(source, ...name.split('/')), target);
+  }
+}
+
+export function verifyTenantBackup(snapshotDirectory) {
+  const snapshot = resolve(snapshotDirectory);
+  if (!existsSync(snapshot) || !lstatSync(snapshot).isDirectory()) throw new Error('Backup directory does not exist.');
+  const manifestPath = join(snapshot, 'backup-manifest.json');
+  if (!existsSync(manifestPath)) throw new Error('Backup manifest is missing.');
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  if (manifest.version !== 1 || !idPattern.test(manifest.tenant_id) || !Array.isArray(manifest.files)) {
+    throw new Error('Backup manifest is invalid.');
+  }
+  const actual = walkFiles(snapshot).filter(name => name !== 'backup-manifest.json');
+  const expected = manifest.files.map(file => file.path).sort();
+  if (new Set(expected).size !== expected.length || JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error('Backup file inventory does not match its manifest.');
+  }
+  for (const file of manifest.files) {
+    if (!/^[a-f0-9]{64}$/.test(file.sha256) || !Number.isSafeInteger(file.bytes) || file.bytes < 0
+      || file.path.startsWith('/') || file.path.includes('..') || file.path.includes('\\')) {
+      throw new Error('Backup manifest contains an invalid file record.');
+    }
+    const path = join(snapshot, ...file.path.split('/'));
+    if (lstatSync(path).size !== file.bytes || digest(path) !== file.sha256) {
+      throw new Error('Backup integrity check failed for ' + file.path + '.');
+    }
+  }
+  if (!expected.includes('tenant.json') || !expected.includes('.env')) throw new Error('Backup is missing required tenant configuration.');
+  return manifest;
+}
+
+export function backupTenant(id, snapshotDirectory, root = tenantRoot) {
+  const source = location(id, root);
+  if (!existsSync(source)) throw new Error('Tenant does not exist.');
+  requireStopped(source);
+  const snapshot = resolve(snapshotDirectory);
+  const fromSource = relative(source, snapshot);
+  if (!fromSource || (!fromSource.startsWith('..' + sep) && fromSource !== '..' && !isAbsolute(fromSource))) {
+    throw new Error('Backup destination must be outside the tenant directory.');
+  }
+  if (existsSync(snapshot)) throw new Error('Backup destination already exists; no files were changed.');
+  copyTree(source, snapshot);
+  const files = walkFiles(snapshot).map(path => {
+    const file = join(snapshot, ...path.split('/'));
+    return { path, bytes: lstatSync(file).size, sha256: digest(file) };
+  });
+  const manifest = { version: 1, tenant_id: id, created_at: new Date().toISOString(), files };
+  writeFileSync(join(snapshot, 'backup-manifest.json'), JSON.stringify(manifest, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
+  verifyTenantBackup(snapshot);
+  return snapshot;
+}
+
+export function restoreTenant(snapshotDirectory, id, root = tenantRoot) {
+  const manifest = verifyTenantBackup(snapshotDirectory);
+  if (manifest.tenant_id !== id) throw new Error('Backup belongs to a different tenant ID.');
+  const target = location(id, root);
+  if (existsSync(target)) throw new Error('Tenant already exists; restore did not overwrite it.');
+  mkdirSync(resolve(root), { recursive: true });
+  const temporary = join(resolve(root), `.restore-${id}-${randomBytes(6).toString('hex')}`);
+  try {
+    mkdirSync(temporary, { mode: 0o700 });
+    for (const file of manifest.files) {
+      const destination = join(temporary, ...file.path.split('/'));
+      mkdirSync(dirname(destination), { recursive: true, mode: 0o700 });
+      copyFileSync(join(resolve(snapshotDirectory), ...file.path.split('/')), destination);
+    }
+    renameSync(temporary, target);
+  } catch (error) {
+    if (existsSync(temporary)) rmSync(temporary, { recursive: true, force: true });
+    throw error;
+  }
+  tenantConfiguration(id, root, {});
+  return target;
+}
+
+export function decommissionTenant(id, snapshotDirectory, confirmation, root = tenantRoot) {
+  if (confirmation !== id) throw new Error('Decommission confirmation must exactly match the tenant ID.');
+  const source = location(id, root);
+  const snapshot = backupTenant(id, snapshotDirectory, root);
+  verifyTenantBackup(snapshot);
+  const tombstone = join(resolve(root), `.decommission-${id}-${randomBytes(6).toString('hex')}`);
+  renameSync(source, tombstone);
+  rmSync(tombstone, { recursive: true, force: true });
+  return snapshot;
 }
 export function provisionTenant(id, basePort, root = tenantRoot) {
   const directory = location(id, root);

@@ -14,6 +14,7 @@ Veyra is a knowledge-grounded voice intelligence platform for customer conversat
 - Groups repeated retrieval abstentions into a knowledge-owner triage inbox.
 - Produces versioned, evidence-linked after-call summary drafts with operator revision and acceptance history.
 - Supports customer-authored disclosure checklists in advisory shadow mode with effective dates, published-source binding, and human confirmation.
+- Provides audited operational pause controls and manual, evidence-linked QA/coaching workflows.
 
 ## Product Areas
 
@@ -26,6 +27,8 @@ Veyra is a knowledge-grounded voice intelligence platform for customer conversat
 | Handoff Inbox | Delivered, acknowledged, and resolved human-assistance work |
 | Knowledge Hub | Controlled publication, grounding visibility, knowledge-gap triage, and disclosure-checklist governance |
 | Analytics | Conversation and retrieval performance views |
+| QA & Coaching | Deterministic call sampling, immutable rubrics, evidence-linked manual review, and coaching history |
+| Operations | Audited capability controls and degraded-state visibility |
 | Architecture | Runtime topology and service relationships |
 
 Veyra currently includes four market agents:
@@ -203,6 +206,21 @@ review URLs can be bookmarked and support browser Back/Forward.
 See [analytics definitions](docs/ANALYTICS.md) for cohort boundaries, sample counts,
 and limitations. Citation presence is not a measure of answer correctness.
 
+## QA and Release Operations
+
+Administrators can create immutable manual QA rubric versions, activate one version,
+sample completed calls deterministically, attach findings to transcript or citation
+evidence, complete reviews, add coaching notes, and compare reviewer agreement. Aggregate
+CSV exports exclude transcript, finding-note, and coaching content. No AI score or bundled
+customer rubric is represented. See [QA reviews](docs/QA_REVIEWS.md).
+
+The Operations page exposes durable pause controls for new sessions, answer generation,
+private guidance, guided delivery, proactive nudges, knowledge ingestion, and publication.
+Every state change requires a reason and is attributed in an audit trail. Outbound delivery
+remains explicitly unavailable until a customer selects and configures a connector.
+Backup, restore, provider-disable, incident, and decommission procedures are documented in
+the [operations runbook](docs/OPERATIONS_RUNBOOK.md).
+
 ## Use Cases and Next Releases
 
 The first local slices of delivered human handoff, knowledge-gap triage, evidence-linked
@@ -273,6 +291,11 @@ GET  /api/handoffs
 POST /api/handoffs/:id/acknowledge
 POST /api/handoffs/:id/resolve
 GET  /api/knowledge/gaps
+GET  /api/operations/controls
+POST /api/operations/controls/:key
+GET  /api/qa/sample
+POST /api/qa/rubrics
+POST /api/qa/reviews
 ```
 
 ### RAG service
@@ -312,11 +335,14 @@ shared/                  Shared schemas and utilities
 
 ## Verification
 
-Build the frontend before opening a pull request:
+Run the complete provider-free release gate before opening a pull request:
 
 ```powershell
-npm run build --workspace apps/frontend
+npm run verify
 ```
+
+This runs gateway, Python, tenant-isolation, provider-inventory, grounding, frontend-build,
+and dependency-audit checks. It does not contact paid model or voice providers.
 
 Check the running stack through:
 
@@ -327,7 +353,7 @@ http://localhost:3001/api/health
 The health endpoint requires a signed-in session. It reports each service
 separately and returns a degraded status when an optional dependency is unavailable.
 
-Run gateway integration tests with `npm run test --workspace apps/api-gateway`.
+Individual checks remain available through the `test:*`, `build`, and `audit:*` scripts.
 
 ## License
 

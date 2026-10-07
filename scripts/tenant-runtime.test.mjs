@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
@@ -8,7 +8,10 @@ import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 import { io } from 'socket.io-client';
 import { execFileSync } from 'node:child_process';
-import { provisionTenant, tenantConfiguration, launchTenant, assertPortsAvailable, repository } from './tenant-runtime.mjs';
+import {
+  assertPortsAvailable, backupTenant, decommissionTenant, launchTenant, provisionTenant,
+  repository, restoreTenant, tenantConfiguration, verifyTenantBackup,
+} from './tenant-runtime.mjs';
 
 test('tenant configuration fails closed and never inherits shared application settings', async t => {
   const root = mkdtempSync(join(tmpdir(), 'veyra-tenant-config-'));
@@ -33,6 +36,42 @@ test('tenant configuration fails closed and never inherits shared application se
   await once(listener, 'listening');
   try { await assert.rejects(assertPortsAvailable([listener.address().port]), /already in use/); }
   finally { await new Promise(resolve => listener.close(resolve)); }
+});
+
+test('tenant backup, integrity verification, restore, and confirmed decommission are recoverable', t => {
+  const root = mkdtempSync(join(tmpdir(), 'veyra-tenant-recovery-'));
+  const backups = mkdtempSync(join(tmpdir(), 'veyra-tenant-backups-'));
+  t.after(() => {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(backups, { recursive: true, force: true });
+  });
+  const original = provisionTenant('alpha', 4100, root);
+  mkdirSync(join(original, 'knowledge'), { recursive: true });
+  writeFileSync(join(original, 'veyra.sqlite'), 'database snapshot');
+  writeFileSync(join(original, 'knowledge', 'current.json'), '{"generation":"one"}');
+  assert.throws(() => backupTenant('alpha', join(original, 'nested-backup'), root), /outside the tenant/);
+  writeFileSync(join(original, 'runtime.lock'), '123');
+  assert.throws(() => backupTenant('alpha', join(backups, 'running'), root), /runtime lock/);
+  rmSync(join(original, 'runtime.lock'));
+
+  const firstBackup = backupTenant('alpha', join(backups, 'first'), root);
+  const manifest = verifyTenantBackup(firstBackup);
+  assert.equal(manifest.tenant_id, 'alpha');
+  assert.ok(manifest.files.some(file => file.path === 'veyra.sqlite'));
+  assert.throws(() => backupTenant('alpha', firstBackup, root), /already exists/);
+  writeFileSync(join(firstBackup, 'veyra.sqlite'), 'tampered');
+  assert.throws(() => verifyTenantBackup(firstBackup), /integrity check failed/);
+
+  const safeBackup = backupTenant('alpha', join(backups, 'safe'), root);
+  assert.throws(() => decommissionTenant('alpha', join(backups, 'wrong-confirmation'), 'beta', root), /exactly match/);
+  const recoveryBackup = decommissionTenant('alpha', join(backups, 'decommission'), 'alpha', root);
+  assert.equal(existsSync(original), false);
+  assert.equal(verifyTenantBackup(recoveryBackup).tenant_id, 'alpha');
+  assert.throws(() => restoreTenant(safeBackup, 'beta', root), /different tenant/);
+  const restored = restoreTenant(recoveryBackup, 'alpha', root);
+  assert.equal(readFileSync(join(restored, 'veyra.sqlite'), 'utf8'), 'database snapshot');
+  assert.throws(() => restoreTenant(recoveryBackup, 'alpha', root), /already exists/);
+  assert.equal(tenantConfiguration('alpha', root).id, 'alpha');
 });
 
 test('two complete tenant stacks isolate sessions, calls, realtime, knowledge and files', { timeout: 120000 }, async t => {

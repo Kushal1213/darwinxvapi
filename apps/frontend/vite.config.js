@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
@@ -16,10 +17,7 @@ export default defineConfig(({ mode }) => {
   return {
     envDir,
     ...(process.env.VEYRA_TENANT_ID && { cacheDir: resolve(__dirname, '../../node_modules/.vite-tenants', createHash('sha256').update(envDir).digest('hex')) }),
-    plugins: [react()],
-    esbuild: {
-      sourcemap: true,
-    },
+    plugins: [react(), tailwindcss()],
     optimizeDeps: {
       sourcemap: false,
     },

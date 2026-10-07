@@ -10,6 +10,8 @@ const ArchitecturePage = lazy(() => import('./pages/ArchitecturePage'));
 const CallHistoryPage = lazy(() => import('./pages/CallHistoryPage'));
 const TeamPage = lazy(() => import('./pages/TeamPage'));
 const HandoffInboxPage = lazy(() => import('./pages/HandoffInboxPage'));
+const OperationsPage = lazy(() => import('./pages/OperationsPage'));
+const QAPage = lazy(() => import('./pages/QAPage'));
 
 export default function App() {
   const getInitialTab = () => {
@@ -25,6 +27,8 @@ export default function App() {
       'history',
       'handoffs',
       'team',
+      'operations',
+      'qa',
     ];
     if (tabs.includes(search)) return search;
     if (tabs.includes(path)) return path;
@@ -90,6 +94,8 @@ export default function App() {
           <HandoffInboxPage onReviewCall={reviewCall} />
         )}
         {activeTab === 'team' && <TeamPage />}
+        {activeTab === 'operations' && <OperationsPage />}
+        {activeTab === 'qa' && <QAPage onReviewCall={reviewCall} />}
       </Suspense>
     </AppLayout>
   );

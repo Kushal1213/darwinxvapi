@@ -64,5 +64,7 @@ than accepting evidence references from the browser.
 - Accuracy, completeness, acceptance-rate, edit-distance, and latency evaluation
   require a customer-reviewed call set before this feature can be called validated.
 - Follow-up actions are structured proposals, not CRM tasks or proof of customer contact.
-- Automated and browser verification is deferred to the roadmap completion pass at
-  the user's request; this implementation is currently unverified.
+- Provider-free lifecycle coverage passed on 2026-10-07 for deterministic generation,
+  replay stability, evidence-preserving revision, latest-only acceptance, and idempotent
+  acceptance. Isolated browser verification also exercised the after-call summary and
+  its mobile layout. Live-provider quality and customer-reviewed accuracy remain open.

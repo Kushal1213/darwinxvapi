@@ -9,7 +9,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { analyticsCsv, buildAnalytics, getAnalytics } from '../src/services/analytics.js';
+import { analyticsCsv, buildAnalytics, buildGuidanceAnalytics, getAnalytics } from '../src/services/analytics.js';
 
 const now = new Date('2026-09-26T12:00:00.000Z');
 const call = (id, fields = {}) => ({
@@ -95,6 +95,66 @@ test('empty cohorts preserve unknown metrics, and market filtering applies to ev
   assert.equal(filtered.daily.at(-1).calls, 1);
   assert.equal(analyticsCsv(filtered).split('\r\n')[0], 'date,calls,completed,handoffs');
   assert.equal(analyticsCsv(filtered).includes('insurance'), false);
+});
+
+test('guidance analytics distinguish exposure, action, editing, feedback, latency, and handoff', () => {
+  const session = (callId, fields = {}) => ({ call_id: callId, market: 'india-loan', ...fields });
+  const nudge = (id, fields = {}) => ({
+    id,
+    type: 'knowledge_tip',
+    created_at: '2026-09-26T10:00:00.000Z',
+    expires_at: '2026-09-26T13:00:00.000Z',
+    origin: 'customer_turn',
+    sources: [{ document_id: 'policy', revision: 1 }],
+    ...fields,
+  });
+  const report = buildGuidanceAnalytics([
+    {
+      session: session('guided-handoff', { outcome: 'human_handoff_requested' }),
+      nudge: nudge('applied', {
+        status: 'applied', displayed_at: '2026-09-26T10:00:01.000Z',
+        applied_at: '2026-09-26T10:00:04.000Z', was_edited: true,
+        feedback: 'useful', latency_ms: 200, origin: 'operator_query',
+      }),
+    },
+    {
+      session: session('dismissed'),
+      nudge: nudge('dismissed', {
+        status: 'dismissed', displayed_at: '2026-09-26T10:00:02.000Z',
+        dismissed_at: '2026-09-26T10:00:06.000Z', dismiss_reason: 'not_relevant',
+        feedback: 'not_useful', latency_ms: 400, sources: [],
+      }),
+    },
+    {
+      session: session('active'),
+      nudge: nudge('active', { status: 'displayed', displayed_at: '2026-09-26T10:00:03.000Z' }),
+    },
+    {
+      session: session('other-market', { market: 'india-insurance' }),
+      nudge: nudge('filtered', { status: 'applied' }),
+    },
+  ], { market: 'india-loan', now });
+
+  assert.deepEqual({
+    suggestions: report.suggestions,
+    displayed: report.displayed,
+    applied: report.applied,
+    edited: report.edited,
+    dismissed: report.dismissed,
+    active: report.active,
+    calls_with_guidance: report.calls_with_guidance,
+    calls_with_handoff: report.calls_with_handoff,
+  }, {
+    suggestions: 3, displayed: 3, applied: 1, edited: 1, dismissed: 1, active: 1,
+    calls_with_guidance: 3, calls_with_handoff: 1,
+  });
+  assert.equal(report.citation_coverage_pct, 66.67);
+  assert.equal(report.feedback_response_pct, 66.67);
+  assert.equal(report.useful_feedback_pct, 50);
+  assert.equal(report.avg_generation_latency_ms, 300);
+  assert.equal(report.avg_decision_ms, 5000);
+  assert.deepEqual(report.origins, { customer_turn: 2, operator_query: 1 });
+  assert.deepEqual(report.dismiss_reasons, [{ reason: 'not_relevant', count: 1 }]);
 });
 
 test('stored workspace and status override conflicting payload claims without disclosing transcript', () => {
@@ -193,7 +253,8 @@ test('analytics API authenticates, validates, isolates, exports and persists acr
   assert.match(csv.headers.get('content-type'), /^text\/csv/);
   assert.match(csv.headers.get('content-disposition'), /^attachment; filename="veyra-analytics-/);
   const csvBody = await csv.text();
-  assert.equal(csvBody.split('\r\n').length, 9);
+  assert.equal(csvBody.split('\r\n').length, 21);
+  assert.equal(csvBody.includes('guidance_metric,value'), true);
   assert.equal(csvBody.includes('own-record'), false);
   assert.equal(csvBody.includes('CONTENT'), false);
   const login = await request('/auth/login', '', { email: 'other@example.test', password });

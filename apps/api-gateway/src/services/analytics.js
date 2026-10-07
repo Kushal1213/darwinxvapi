@@ -179,21 +179,24 @@ export function getAnalytics({ workspaceId, days = 7, market = 'all', now = new 
   const sessions = db.prepare('SELECT id, status, ended_at, payload FROM calls WHERE workspace_id = ?')
     .all(workspaceId).map((row) => ({ ...JSON.parse(row.payload), call_id: row.id, status: row.status, ended_at: row.ended_at }));
   const report = buildAnalytics(sessions, { days, market, now });
-  const guidanceRecords = db.prepare(`
-    SELECT n.payload AS nudge_payload, c.id AS call_id, c.status AS call_status,
-      c.ended_at AS call_ended_at, c.payload AS call_payload
-    FROM nudges n
-    JOIN calls c ON c.id = n.call_id
-    WHERE c.workspace_id = ?
-  `).all(workspaceId).map((row) => ({
-    nudge: JSON.parse(row.nudge_payload),
-    session: {
-      ...JSON.parse(row.call_payload),
-      call_id: row.call_id,
-      status: row.call_status,
-      ended_at: row.call_ended_at,
-    },
-  }));
+  const hasNudges = db.prepare(
+    "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'nudges'",
+  ).get();
+  const guidanceRecords = hasNudges ? db.prepare(`
+      SELECT n.payload AS nudge_payload, c.id AS call_id, c.status AS call_status,
+        c.ended_at AS call_ended_at, c.payload AS call_payload
+      FROM nudges n
+      JOIN calls c ON c.id = n.call_id
+      WHERE c.workspace_id = ?
+    `).all(workspaceId).map((row) => ({
+      nudge: JSON.parse(row.nudge_payload),
+      session: {
+        ...JSON.parse(row.call_payload),
+        call_id: row.call_id,
+        status: row.call_status,
+        ended_at: row.call_ended_at,
+      },
+    })) : [];
   report.guidance = buildGuidanceAnalytics(guidanceRecords, { days, market, now });
   return report;
 }

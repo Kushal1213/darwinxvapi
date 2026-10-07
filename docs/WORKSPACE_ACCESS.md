@@ -83,11 +83,9 @@ the existing workspace. Shared-process multi-tenancy remains unsupported.
 
 ## Verification
 
-The dependency audit on 2026-10-06 reports zero production dependency advisories
-after updating Axios, Express and its request/proxy dependencies, Socket.IO's engine,
-Morgan, and UUID. The full development graph still reports advisories in the Vite 5
-development server and Tailwind 3 build/watch chain; remediation requires tested major
-build-tool migrations. Do not expose development servers to untrusted networks.
+The dependency audit on 2026-10-07 reports zero advisories across production and
+development dependencies after the Vite 8 and Tailwind 4 migration. Development servers
+remain local tools and must not be exposed as production ingress.
 Node 22 currently emits an experimental warning for its built-in SQLite API.
 
 `npm run test --workspace apps/api-gateway` covers archive migration, authenticated

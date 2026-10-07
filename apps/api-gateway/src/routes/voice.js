@@ -9,6 +9,7 @@ import { persistHandoffEscalation } from '../services/handoff-deliveries.js';
 import { recordKnowledgeGap } from '../services/knowledge-gaps.js';
 import { evaluatePlaybook } from '../services/playbooks.js';
 import { createDisclosureChecklistStore } from '../services/disclosure-checklists.js';
+import { assertOperationalControl, isOperationalControlEnabled } from '../services/operational-controls.js';
 
 const router = express.Router();
 
@@ -96,6 +97,7 @@ function getOrCreateSession(callId, overrides = {}) {
       throw Object.assign(new Error('This call has ended. Start a new session.'), { status: 409 });
     }
     if (overrides.market !== undefined) scopeForMarket(overrides.market);
+    assertOperationalControl('new_sessions');
     conversations.set(callId, createSession(callId, overrides));
   }
   return conversations.get(callId);
@@ -311,6 +313,30 @@ async function processVoiceTurn({ callId, query, market, language, recordUser = 
     return { call_id: callId, answer: greeting, sources: [], response_kind: 'conversation', session, escalation: null, latency_ms: Date.now() - startedAt };
   }
 
+  if (!isOperationalControlEnabled('customer_answer_generation')) {
+    const answer = 'Automated knowledge answers are temporarily paused. I can still record a request for human assistance.';
+    const turn = {
+      role: 'assistant',
+      content: answer,
+      sources: [],
+      response_kind: 'operational_pause',
+      latency_ms: Date.now() - startedAt,
+      ts: new Date().toISOString(),
+    };
+    session.turns.push(turn);
+    session.state.current_stage = 'restricted';
+    emitTurn(callId, turn);
+    return {
+      call_id: callId,
+      answer,
+      sources: [],
+      response_kind: 'operational_pause',
+      session,
+      escalation: null,
+      latency_ms: turn.latency_ms,
+    };
+  }
+
   const ragScope = scopeForMarket(session.market);
   const ragStartedAt = Date.now();
   const ragResponse = await axios.post(
@@ -507,7 +533,9 @@ router.post('/vapi-llm', async (req, res) => {
     return writeSseResponse(res, result.answer);
   } catch (err) {
     logger.error({ call_id, err: err.message }, 'RAG call failed in vapi-llm');
-    const fallback = "I'm sorry, I'm having trouble retrieving that information right now. Please ask a specialist for detailed assistance.";
+    const fallback = err.code === 'CAPABILITY_PAUSED'
+      ? 'This automated voice service is temporarily paused. Please ask a team member for assistance.'
+      : "I'm sorry, I'm having trouble retrieving that information right now. Please ask a specialist for detailed assistance.";
     return writeSseResponse(res, fallback, true);
   }
 });
@@ -573,8 +601,10 @@ router.post('/query', async (req, res) => {
     const status = err.status || (err.code === 'ECONNABORTED' ? 504 : 503);
     logger.error({ callId, err: err.message, code: err.code }, 'Voice turn failed');
     return res.status(status).json({
-      error: status === 409 ? err.message : status === 504 ? 'RAG request timed out' : 'RAG service is unavailable',
-      message: status === 409 ? err.message : 'The voice service could not complete this turn. Check the RAG service health and try again.',
+      error: err.code === 'CAPABILITY_PAUSED' ? err.message : status === 409 ? err.message : status === 504 ? 'RAG request timed out' : 'RAG service is unavailable',
+      message: err.code === 'CAPABILITY_PAUSED' ? err.message : status === 409 ? err.message : 'The voice service could not complete this turn. Check the RAG service health and try again.',
+      ...(err.code && { code: err.code }),
+      ...(err.control && { control: err.control }),
     });
   }
 });
@@ -694,6 +724,7 @@ router.post('/session/:id/guidance/query', async (req, res) => {
   const session = conversations.get(req.params.id);
   if (!session || !isLive(session)) return res.status(404).json({ error: 'Active session not found' });
   if (activeEscalation(session)) return res.status(409).json({ error: 'Resolve the human handoff before requesting automated guidance' });
+  assertOperationalControl('private_guidance');
   if (pendingTurns.has(session.call_id)) return res.status(409).json({ error: 'A turn is already in progress for this call.' });
 
   pendingTurns.add(session.call_id);
@@ -779,6 +810,7 @@ router.post('/session/:id/nudges/:nudgeId/apply', (req, res) => {
     return res.json({ answer: priorTurn.content, sources: priorTurn.sources || [], turn: priorTurn, nudge: current, replayed: true });
   }
   if (current.status === 'applied') return res.status(409).json({ error: 'Applied nudge is missing its recorded turn' });
+  assertOperationalControl('guided_delivery');
 
   let appended = false;
   let turn;
@@ -902,6 +934,7 @@ async function feedToInsightsEngine(call_id, speaker, text) {
       { timeout: 2000 }
     );
     if (response.data?.nudges && response.data.nudges.length > 0) {
+      if (!isOperationalControlEnabled('proactive_nudges')) return;
       for (const nudge of response.data.nudges) {
         const session = conversations.get(call_id);
         if (!session || !isLive(session)) continue;

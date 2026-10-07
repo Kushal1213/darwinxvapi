@@ -1,7 +1,7 @@
 # Veyra Product Work Plan
 
 Research revision: 2026-09-26
-Implementation status reviewed: 2026-10-06
+Implementation status reviewed: 2026-10-07
 Status: active product plan; use as guidance and validate priorities against product evidence.
 
 Detailed workflow portfolio and proposed implementation slices:
@@ -26,40 +26,59 @@ Important changes from the previous plan:
 
 | Area | Implemented locally | Remaining gap |
 | --- | --- | --- |
-| Calls | Shared lifecycle, persistence, review, citations, and durable internal handoff delivery/acknowledgement/resolution | External connector delivery and live voice reliability |
+| Calls | Shared lifecycle, persistence, transcript/citation review, durable internal handoff delivery/acknowledgement/resolution, and provider-free evidence-linked summary versions | External connector delivery, provider-backed summary retry/evaluation, and live voice reliability |
 | Workspace | SQLite users/sessions, admin/operator permissions, invitations, disabling | Recovery, MFA/SSO, permission review, customer deployment |
 | Nudges | Persistence, expiry, duplicate suppression, feedback, reason-coded guidance rejection, audit events, and interaction analytics | Signal-quality/correctness evaluation and production delivery behavior |
 | Knowledge | Immutable revisions, effective windows, approval/publication jobs, revision/page citations, and grouped knowledge-gap triage | Separate worker supervision, automatic gap regression, retention, and explicit legacy corpus review |
 | Tenant boundary | Independent local stacks and storage; cross-stack tests | Private production networks, container/VM boundaries, per-tenant operations |
 | Retrieval | FAISS plus lexical fallback; market/product hard filters; attributed evidence extraction and explicit abstention | Customer-reviewed isolation/support corpus and calibrated thresholds |
 | Analytics | Persisted workspace and guidance-interaction metrics, distinct sample counts, unavailable states, filters, and CSV export | No validated pilot ROI, correctness result, or live-provider performance baseline |
+| Checklist governance | Immutable market/channel/workflow versions, published-revision binding, different-admin approval, effective dates, retirement, shadow suggestions, and human confirmation | Customer/legal approval, dedicated role decision, semantic evaluation, and reviewed false-positive/negative set |
+| QA/coaching | Admin-only immutable rubric versions, deterministic samples, evidence-linked findings, immutable manual scores, coaching history, reviewer agreement, and content-free aggregate export | Customer-owned rubric, reviewer evaluation, and dedicated role/assignment decision |
 | Providers | Maintained `google-genai` SDK adapter, pinned dependencies, and provider-free contract tests | Account/region availability, limits, terms, and authorized live smoke tests |
-| Verification | 38 gateway + 19 Python + 2 tenant tests, seven-case grounding gate, provider inventory test, and frontend production build passed on 2026-10-06 | Live-provider quality and customer-reviewed corpus remain unproven |
+| Verification | 45 gateway + 19 Python + 3 tenant tests, the seven-case grounding gate, provider inventory, Vite 8/Tailwind 4 build, zero-advisory audit, and isolated desktop/mobile browser workflows passed on 2026-10-07 | Live-provider quality, customer-reviewed evaluation, and production-environment drill evidence remain open |
 
 ## Live Assistance Expansion Roadmap — 2026-10-06
 
-The next product expansion builds on operator-guided grounded replies without
-turning Veyra into an autonomous lending or servicing system. Work should proceed
-in this order, with each delivered response remaining human-controlled and cited.
+This table records the original live-assistance sequence and its present state without
+turning Veyra into an autonomous lending or servicing system. Orders 1-5 now have local
+implementations at the scopes shown; use the Current Next-Work Queue below for the
+authoritative order of remaining work.
 
-| Order | Capability | Delivery slice | Exit evidence |
+| Order | Capability | Current status | Remaining exit evidence |
 | --- | --- | --- | --- |
-| 1 | Private Ask Veyra | Operator-only knowledge search that never enters the customer transcript; editable reply preview; copy or explicit delivery; original and delivered wording retained | Transcript isolation, edit attribution, replay, handoff, expiry, and browser interaction tests |
-| 2 | Intent-driven playbooks | First deterministic India-loan definition implemented with cited evidence and human-controlled actions; customer-owned configuration remains | Customer-approved playbook fixtures; immutable configuration versions; no autonomous external actions |
-| 3 | Guidance measurement | Implementation added for display, apply, edit, dismissal reasons, latency, source, feedback, and outcome context with denominators | Final automated/browser verification deferred to roadmap completion; usefulness remains separate from correctness review |
-| 4 | Evidence-linked after-call work | Provider-free versioned drafts, structured proposed follow-ups, transcript/citation navigation, immutable edits, and acceptance audit implemented | Provider retry path, final automated/browser verification, and curated accuracy review remain |
-| 5 | Disclosure checklist shadow mode | Immutable scoped versions, published-revision binding, second-admin approval, effective dates, observed/missing/uncertain suggestions, evidence navigation, and human confirmation implemented | Customer legal/policy-owner approval, dedicated role, final verification, and reviewed false-positive/negative set remain |
-| 6 | QA and coaching | Immutable manual rubrics, sampling, evidence-linked findings, and coaching history | Reviewer attribution, rubric versioning, disagreement and sample-size reporting |
-| 7 | Supervisor and system integrations | Private supervisor guidance, controlled takeover, one selected CRM context adapter, and one external handoff destination | Named customer systems, least-privilege access, idempotent callbacks, failure runbooks |
-| 8 | Evaluated language expansion | Code-switch and locale-specific guidance evaluated independently per market | Native-speaker review and market-specific held-out gates |
+| 1 | Private Ask Veyra | Implemented and included in the earlier verified baseline | Browser evaluation and sentence-level support warnings for edited wording |
+| 2 | Intent-driven playbooks | First deterministic India-loan definition implemented and included in the earlier verified baseline | Customer-authored configuration, independent approval, effective versions, and reviewed fixtures |
+| 3 | Guidance measurement | Interaction funnel, reason-coded dismissal, feedback, latency, source, origin, and handoff context locally verified | Usefulness remains separate from correctness review |
+| 4 | Evidence-linked after-call work | Provider-free versioned drafts, structured proposed follow-ups, evidence navigation, immutable edits, and acceptance audit locally verified | Provider retry/usage path and curated accuracy review |
+| 5 | Disclosure checklist shadow mode | Immutable scoped versions, published-revision binding, different-admin approval, effective dates, evidence navigation, human confirmation, and retirement locally verified | Customer policy/legal approval, dedicated role, and reviewed false-positive/negative set |
+| 6 | QA and coaching | First admin-only provider-free slice locally verified | Customer rubric, reviewer agreement evaluation, and dedicated role/assignment decision |
+| 7 | Supervisor and system integrations | Internal handoff inbox only; no external destination selected | Private supervisor guidance, controlled takeover, one selected CRM/handoff adapter, least-privilege access, idempotent callbacks, and runbooks |
+| 8 | Evaluated language expansion | Four demo agents exist; no production language claim | Native-speaker review, code-switch evaluation, and market-specific held-out gates |
 
-Order 1's first local slice is implemented: private scoped search, explicit
-abstention, editable/copyable cited replies, controlled voice/text delivery, and
-original-versus-delivered audit evidence. “Speak”, “add”, or any later external
-action must remain an explicit operator decision. Editing a generated reply does
-not establish that the edit is supported; sentence-level support warnings and
-browser evaluation remain follow-up work and must not be represented as a
-compliance determination.
+Orders 1-2 are part of the earlier verified baseline. Orders 3-6 are included in the
+2026-10-07 local automated/browser pass. “Speak”, “add”, confirmation,
+or any later external action must remain an explicit human decision. Editing generated
+wording does not establish evidence support, and a checklist suggestion does not
+establish compliance.
+
+## Current Next-Work Queue
+
+This queue supersedes any older wording that describes already-delivered slices as
+future implementation:
+
+1. **Operational release hardening:** repository backup/restore/decommission tooling and a
+   provider-disable runbook are locally verified; execute deployment-like fault, encrypted-
+   backup, and provider-account drills in the selected production environment.
+2. **Manual QA validation:** evaluate the locally verified workflow with a customer-owned
+   rubric and multiple reviewers, measure agreement, and decide the dedicated reviewer
+   role/assignment model. Do not add AI scoring before reviewer agreement is measured.
+3. **Guidance governance:** move playbook definitions into customer-authored approved
+   versions and add sentence-level evidence warnings for operator-edited replies.
+4. **Knowledge improvement closure:** add change-impact preview, regression cases from
+   resolved gaps/citations, automatic execution, and explicit retention/deletion rules.
+5. **Selected integrations and expansion:** only after a customer names the systems,
+   build one external handoff/CRM path; evaluate each additional market/language separately.
 
 Evidence inspected for this revision:
 
@@ -109,21 +128,22 @@ No customer name, team size, cloud provider, retention duration, or commercial p
 
 The work-package text below preserves the original planning intent. The current-baseline
 table and implementation-progress sections are authoritative for completed local work.
-Owner labels are responsibilities to assign, not existing staffing commitments. Effort
-is a rough engineering planning range for a familiar codebase; external review/procurement
-time is excluded.
+Owner labels are responsibilities to assign, not existing staffing commitments. Any
+historical effort ranges in the detailed package text remain planning estimates rather
+than delivery promises; external review and procurement time is excluded.
 
-| ID | Priority | Work package | Dependency | Accountable role | Rough effort |
-| --- | --- | --- | --- | --- | --- |
-| P0-A | P0 | Grounding, market eligibility, truthful metrics, baseline evaluation | None | AI/backend lead + product owner | 4-7 engineering days |
-| P0-B | P0 | Provider/SDK and dependency compatibility review | None; can overlap P0-A | Platform lead | 2-4 days to inventory/spike; remediation estimated after triage |
-| P0-C | P0 | Knowledge revisions, review, and publication controls | P0-A eligibility contract | Backend lead + knowledge owner | 6-10 engineering days |
-| P0-D | P0 | Durable jobs, reconciliation, recovery tests | P0-C revision/publication schema | Platform/backend lead | 5-8 engineering days |
-| P0-E | P0 | Customer deployment, privacy, security and operational readiness | Design can overlap; live-data release needs A-D | Platform lead + customer security owner | 5-10 engineering days plus external review |
-| P1-A | P1 | Real operational analytics and pilot evaluation | P0-A events; P0-C/D versions and jobs | Product/data lead | 4-7 engineering days |
-| P1-B | P1 | Controlled pilot and one provider integration | P0-A through E and P1-A gates | Product owner + customer operations | Timeboxed pilot agreed after discovery |
+| ID | Priority | Work package | Current status | Dependency / remaining owner |
+| --- | --- | --- | --- | --- |
+| P0-A | P0 | Grounding, market eligibility, truthful metrics, baseline evaluation | Local foundation implemented and previously verified | Customer-reviewed corpus and live-provider gate · AI/backend lead + product owner |
+| P0-B | P0 | Provider/SDK and dependency compatibility review | Maintained SDK and provider-free inventory implemented | Account/region/terms/budget and authorized smoke tests · platform lead |
+| P0-C | P0 | Knowledge revisions, review, and publication controls | Local immutable approval/publication flow implemented and previously verified | Customer corpus ownership and policy review · backend lead + knowledge owner |
+| P0-D | P0 | Durable jobs, reconciliation, recovery | Single-gateway durable knowledge jobs implemented and previously verified | Separate supervision, quotas/cleanup, backup reconciliation · platform/backend lead |
+| P0-E | P0 | Customer deployment, privacy, security and operational readiness | First audited kill-switch/enforcement slice locally verified | Customer security/privacy decisions, private deployment, restore and incident exercises · platform + customer security owner |
+| P1-A | P1 | Real operational analytics and pilot evaluation | Workspace and guidance interaction analytics locally verified | Pilot baselines, outcome joins, provider cost and customer evaluation · product/data lead |
+| P1-B | P1 | Controlled pilot and one provider integration | Not started | P0-E, named customer systems, budget and owners · product + customer operations |
 
-Do not interpret these ranges as a dated delivery promise or add them blindly across parallel tracks. Re-estimate after discovery and the SDK/dependency spike. P0-C may be built using fixtures before P0-B completes, but no live-provider readiness claim follows from that.
+Re-estimate remaining work after customer discovery and provider/account validation.
+The provider-free P0-C implementation does not establish live-provider readiness.
 
 ### P0-A: Grounded Answers and Honest Product Signals
 
@@ -255,7 +275,7 @@ Evaluation starting point:
 - Proposed latency budgets for initial measurement: p95 text/retrieval response <= 2 seconds and p95 nudge display <= 3 seconds after final transcript. Baseline live providers before accepting these budgets; no voice latency promise yet.
 - Report nudge usefulness with response rate and sample count. Set a commercial target only after baseline operator feedback exists.
 
-## Decisions Required Before Implementation Resumes
+## Decisions Required Before Pilot Expansion
 
 | Decision | Recommendation for now | Who confirms | Required before |
 | --- | --- | --- | --- |
@@ -451,8 +471,7 @@ targets, and additional market-specific playbooks.
 - Metrics are labelled as interaction evidence, never correctness, compliance, customer
   satisfaction, causal impact, or ROI.
 
-Per the requested roadmap workflow, automated and browser verification for this slice
-is deferred until the remaining roadmap implementation is complete.
+Automated and isolated-browser verification for this slice passed on 2026-10-07.
 
 ### Evidence-linked after-call summary slice — 2026-10-06
 
@@ -468,8 +487,7 @@ is deferred until the remaining roadmap implementation is complete.
   or external provider generation.
 
 Still open: provider-backed asynchronous generation and retry, provider usage records,
-sentence-level support checks for edits, curated summary evaluation, and final automated
-and browser verification.
+sentence-level support checks for edits, and curated summary evaluation.
 
 ### Disclosure checklist shadow-mode slice — 2026-10-06
 
@@ -485,8 +503,8 @@ and browser verification.
   versions, and absence of an approved checklist remains visible rather than passing.
 
 Still open: customer policy/legal sign-off, a dedicated compliance-owner role, semantic
-and multilingual evaluation, disagreement analytics, reviewed false-positive/negative
-fixtures, and final automated and browser verification.
+and multilingual evaluation, disagreement analytics, and reviewed false-positive/negative
+fixtures.
 
 ## Definition of Product Progress
 

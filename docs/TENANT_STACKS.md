@@ -79,6 +79,30 @@ A reused/live PID or malformed lock requires manual inspection, not automatic de
 No migration or deletion of the existing root database/index is performed.
 The original npm run dev workflow remains available.
 
+## Backup, Restore, and Decommission
+
+Stopped tenant stacks can be copied into integrity-manifested recovery snapshots:
+
+```powershell
+npm run tenant -- backup <tenant-id> <new-backup-directory>
+npm run tenant -- verify-backup <backup-directory>
+npm run tenant -- restore <backup-directory> <tenant-id>
+```
+
+Backup refuses a runtime lock or existing destination. Verification checks the exact file
+inventory, byte lengths, and SHA-256 digests. Restore refuses a mismatched tenant ID or an
+existing target and publishes the recovered directory only after every file is copied.
+
+Decommission requires an exact ID confirmation and completes a verified backup before local
+tenant data is removed:
+
+```powershell
+npm run tenant -- decommission <tenant-id> <new-backup-directory> --confirm=<tenant-id>
+```
+
+Snapshots contain credentials and customer data; store them outside the repository in
+encrypted, access-controlled storage. See [Operations Runbook](OPERATIONS_RUNBOOK.md).
+
 ## Security Boundary and Remaining Work
 
 All tenant services bind to loopback. This mode is for a trusted local administrator;
@@ -94,8 +118,8 @@ On Windows, credential files inherit the directory ACL; mode 0600 is not an ACL.
 
 There is no tenant-switching UI, shared control plane, billing/provisioning service,
 cross-tenant membership, shared-worker scoping, or database row-level isolation.
-Those require a separate architecture milestone. Knowledge approval, durable
-processing, retention, and dependency remediation also remain open.
+Those require a separate architecture milestone. Customer-specific retention and production
+backup scheduling remain external deployment decisions.
 
 ## Verification
 

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import NudgeFeed from '../components/NudgeFeed';
 import CallSummaryReview from '../components/CallSummaryReview';
+import QAReviewPanel from '../components/QAReviewPanel';
 import { MARKET_LABELS } from '../components/AnalyticsShared';
 import {
   EmptyState,
@@ -241,6 +242,11 @@ export default function CallHistoryPage({ selectedId = null, onSelectCall }) {
               )}
             </div>
           ))}
+          <QAReviewPanel
+            callId={session.call_id}
+            turns={session.turns}
+            onNavigateEvidence={navigateToEvidence}
+          />
           <CallSummaryReview
             key={session.call_id}
             callId={session.call_id}

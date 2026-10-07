@@ -62,7 +62,7 @@ Adapted design dials, as planning shorthand rather than a Taste dashboard preset
 - **Motion intensity: 2/10.** Short feedback transitions and meaningful live-state indicators; reduced-motion support throughout.
 - **Visual density: 6/10.** Useful information remains in view, with more breathing room for onboarding and focused reading.
 
-Keep the current React 18, Vite, Tailwind 3, Framer Motion, Lucide, and Recharts foundation initially. A component or accessibility dependency can be evaluated if a specific interaction needs it. A framework migration or animation-library replacement is not a design milestone.
+Keep the current React 18, Vite 8, Tailwind 4, Framer Motion, Lucide, and Recharts foundation. A component or accessibility dependency can be evaluated if a specific interaction needs it. A framework migration or animation-library replacement is not a design milestone.
 
 ## Page priorities
 

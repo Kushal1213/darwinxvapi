@@ -5,6 +5,7 @@ import { basename, extname } from 'node:path';
 import { z } from 'zod';
 import { getDatabase } from '../services/database.js';
 import { enqueueKnowledgeJob, familyHasJob, knowledgeJobs, pendingKnowledgeJobs, startJobWorker, transaction } from '../services/knowledge-jobs.js';
+import { assertOperationalControl } from '../services/operational-controls.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 6 } });
@@ -101,6 +102,7 @@ export function startKnowledgeWorker(onError) {
       const row = get(job.document_id);
       const doc = row.document;
       if (job.kind === 'publish') {
+        assertOperationalControl('knowledge_publication', { queued: true });
         if (doc.reviewStatus !== 'approved' || doc.approvalId !== job.approval_id || doc.publicationStatus !== 'publishing' || history(doc)[0].id !== doc.id) {
           throw Object.assign(new Error('Publication approval is no longer valid.'), { permanent: true });
         }
@@ -108,6 +110,7 @@ export function startKnowledgeWorker(onError) {
         return ingestion('/documents/' + doc.id + '/publish?operation_id=' + job.id, { method: 'POST' });
       }
       if (job.kind === 'withdraw') return ingestion('/documents/' + doc.id + '?operation_id=' + job.id + '&family_id=' + doc.familyId, { method: 'DELETE' });
+      assertOperationalControl('knowledge_ingestion', { queued: true });
       if (!['uploaded', 'processing', 'failed'].includes(doc.status) || history(doc)[0].id !== doc.id) throw Object.assign(new Error('Processing revision is no longer current.'), { permanent: true });
       save({ ...doc, status: 'processing', error: null });
       const form = new FormData();
@@ -163,6 +166,7 @@ const receiveUpload = (req, res, next) => {
   });
 };
 function uploadRevision(req, res) {
+  assertOperationalControl('knowledge_ingestion');
   if (pendingKnowledgeJobs() >= 100) return res.status(429).json({ error: 'The knowledge queue is full. Try again after pending jobs finish.' });
   const parsed = metadata.safeParse(req.body);
   if (!parsed.success || !req.file?.size) return res.status(400).json({ error: parsed.error?.issues?.[0]?.message || 'Choose a file and provide a title, market, and category.' });
@@ -197,6 +201,7 @@ router.post('/documents/:id/approve', async (req, res) => {
   const row = get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Document not found' });
   const doc = row.document;
+  assertOperationalControl('knowledge_publication');
   if (doc.createdById === req.session.userId) return res.status(409).json({ error: 'A different administrator must approve this document.' });
   if (doc.status !== 'ready' || doc.reviewStatus !== 'pending' || doc.publicationStatus !== 'unpublished') {
     return res.status(409).json({ error: 'Only a ready, unpublished document awaiting review can be approved.' });
@@ -231,6 +236,7 @@ router.post('/documents/:id/reject', (req, res) => {
   res.json({ document: rejected });
 });
 router.post('/documents/:id/retry', (req, res) => {
+  assertOperationalControl('knowledge_ingestion');
   const row = get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Document not found' });
   if (familyBusy(row.document) || history(row.document)[0].id !== row.id || !['failed', 'archived'].includes(row.document.status)) return res.status(409).json({ error: 'Only the latest failed or archived revision can be retried.' });
@@ -278,6 +284,8 @@ router.post('/jobs/:id/retry', (req, res) => {
   if (job.state !== 'failed') return res.status(409).json({ error: 'Only failed jobs can be retried.' });
   if (pendingKnowledgeJobs() >= 100) return res.status(429).json({ error: 'The knowledge queue is full.' });
   const doc = get(job.document_id).document;
+  if (job.kind === 'publish') assertOperationalControl('knowledge_publication');
+  if (job.kind === 'process') assertOperationalControl('knowledge_ingestion');
   if (job.kind === 'publish' && effectiveWindowStatus(doc) === 'expired') {
     transaction(() => {
       database().prepare("UPDATE knowledge_jobs SET state = 'cancelled', error = NULL, updated_at = ? WHERE id = ?").run(Date.now(), job.id);

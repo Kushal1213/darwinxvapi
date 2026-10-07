@@ -196,6 +196,90 @@ export function getDatabase() {
     );
     CREATE INDEX IF NOT EXISTS knowledge_jobs_due ON knowledge_jobs(state, next_attempt_at);
     CREATE INDEX IF NOT EXISTS knowledge_jobs_family ON knowledge_jobs(family_id, state);
+    CREATE TABLE IF NOT EXISTS operational_controls (
+      key TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL REFERENCES workspace(id),
+      enabled INTEGER NOT NULL,
+      version INTEGER NOT NULL DEFAULT 1,
+      reason TEXT NOT NULL,
+      changed_by TEXT REFERENCES users(id),
+      changed_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS operational_control_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      control_key TEXT NOT NULL REFERENCES operational_controls(key),
+      actor_id TEXT REFERENCES users(id),
+      action TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      payload TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS operational_control_events_recent
+      ON operational_control_events(id DESC);
+    CREATE TABLE IF NOT EXISTS qa_rubrics (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL REFERENCES workspace(id),
+      name TEXT NOT NULL,
+      version TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_by TEXT NOT NULL REFERENCES users(id),
+      activated_by TEXT REFERENCES users(id),
+      created_at TEXT NOT NULL,
+      activated_at TEXT,
+      retired_at TEXT,
+      payload TEXT NOT NULL,
+      UNIQUE(workspace_id, name, version)
+    );
+    CREATE INDEX IF NOT EXISTS qa_rubrics_status
+      ON qa_rubrics(workspace_id, status, created_at DESC);
+    CREATE TABLE IF NOT EXISTS qa_reviews (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL REFERENCES workspace(id),
+      call_id TEXT NOT NULL REFERENCES calls(id),
+      rubric_id TEXT NOT NULL REFERENCES qa_rubrics(id),
+      reviewer_id TEXT NOT NULL REFERENCES users(id),
+      state TEXT NOT NULL,
+      score_earned INTEGER,
+      score_possible INTEGER,
+      assigned_at TEXT NOT NULL,
+      completed_at TEXT,
+      payload TEXT NOT NULL,
+      UNIQUE(call_id, rubric_id, reviewer_id)
+    );
+    CREATE INDEX IF NOT EXISTS qa_reviews_call
+      ON qa_reviews(call_id, assigned_at DESC);
+    CREATE INDEX IF NOT EXISTS qa_reviews_report
+      ON qa_reviews(workspace_id, state, completed_at DESC);
+    CREATE TABLE IF NOT EXISTS qa_findings (
+      id TEXT PRIMARY KEY,
+      review_id TEXT NOT NULL REFERENCES qa_reviews(id),
+      criterion_id TEXT NOT NULL,
+      verdict TEXT NOT NULL,
+      note TEXT,
+      turn_index INTEGER,
+      source_index INTEGER,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(review_id, criterion_id)
+    );
+    CREATE TABLE IF NOT EXISTS qa_coaching_notes (
+      id TEXT PRIMARY KEY,
+      review_id TEXT NOT NULL REFERENCES qa_reviews(id),
+      actor_id TEXT NOT NULL REFERENCES users(id),
+      note TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS qa_coaching_review
+      ON qa_coaching_notes(review_id, created_at);
+    CREATE TABLE IF NOT EXISTS qa_review_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      review_id TEXT NOT NULL REFERENCES qa_reviews(id),
+      actor_id TEXT NOT NULL REFERENCES users(id),
+      action TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      payload TEXT
+    );
+    CREATE INDEX IF NOT EXISTS qa_review_events_review
+      ON qa_review_events(review_id, id);
     CREATE TABLE IF NOT EXISTS team_invites (
       id TEXT PRIMARY KEY, email TEXT NOT NULL, role TEXT NOT NULL,
       token_hash TEXT NOT NULL UNIQUE, expires_at INTEGER NOT NULL,
@@ -210,7 +294,7 @@ export function getDatabase() {
   if (!nudgeEventColumns.some((column) => column.name === 'payload')) {
     db.exec('ALTER TABLE nudge_events ADD COLUMN payload TEXT');
   }
-  db.exec('PRAGMA user_version = 10');
+  db.exec('PRAGMA user_version = 12');
   database = db;
   return db;
 }

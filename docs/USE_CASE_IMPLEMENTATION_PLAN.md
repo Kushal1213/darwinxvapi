@@ -1,7 +1,13 @@
 # Veyra Use Cases and Implementation Plan
 
-Planning revision: 2026-10-06
-Status: UC-02 internal inbox and UC-03 gap triage implemented locally; remaining slices require the gates stated below.
+Planning revision: 2026-10-07
+Status reconciled with current code: UC-01's local grounding foundation, UC-01A's
+private-guidance/playbook/measurement slices, UC-02's internal inbox, UC-03's gap inbox,
+UC-04's provider-free summary flow, and UC-06's guarded shadow-mode infrastructure are
+implemented and passed the 2026-10-07 local automated/browser verification pass.
+UC-05's first manual-review slice and UC-08's first authenticated kill-switch slice are
+also locally verified. UC-07 impact execution, UC-08 incident/restore exercises,
+external connectors, and evaluated language expansion remain future work.
 
 ## Product Direction
 
@@ -26,20 +32,54 @@ deployment boundaries, and a closed improvement loop—not generic RAG alone.
 | ID | Use case | Primary actor | Current foundation | Priority | Recommendation |
 | --- | --- | --- | --- | --- | --- |
 | UC-01 | Grounded policy assistance | Operator | Implemented: scoped retrieval, citations, abstention, voice/text sessions | P0 hardening | Pilot after customer corpus and live-provider gates |
-| UC-01A | Live guidance console | Operator | Private search/editable delivery, first live playbook, and guidance measurement implemented; final verification deferred | P0 enhancement | Add customer-owned playbook approval and edit-support warnings |
+| UC-01A | Live guidance console | Operator | Private search/editable delivery, first live playbook, and guidance measurement locally verified | P0 enhancement | Add customer-owned playbook approval and edit-support warnings |
 | UC-02 | Delivered human handoff | Operator and supervisor | Durable internal delivery, acknowledgement, resolution, and audit events implemented | P0 hardening | Select and validate one external connector before claiming transfer |
 | UC-03 | Knowledge-gap inbox | Knowledge owner | Deterministic grouping, counts, states, revision-gated resolution, UI, and audit events implemented | P1 hardening | Add regression-case execution and retention policy |
 | UC-04 | Evidence-linked after-call summary | Operator and reviewer | Provider-free versioned draft, evidence navigation, revision, and acceptance implemented | P1 hardening | Add provider retry and curated evaluation |
-| UC-05 | QA review and coaching | Supervisor/reviewer | Transcript, citations, nudges, and outcomes exist | P1 | Add manual rubric before AI scoring |
+| UC-05 | QA review and coaching | Supervisor/reviewer | Admin-only immutable rubrics, deterministic sampling, evidence-linked manual findings, coaching history, agreement and aggregate export locally verified | P1 | Obtain customer rubric and reviewer evaluation before AI suggestions |
 | UC-06 | Customer-owned disclosure checklist | Operator and compliance reviewer | Immutable scoped versions, published-source binding, second-admin approval, live shadow states, and human confirmation implemented | P1 guarded | Obtain customer/legal approval and reviewed false-positive/negative set |
 | UC-07 | Knowledge change impact review | Knowledge owner | Revision comparison, effective windows, publication jobs, and history exist | P1 | Add usage/impact preview and rollback selection |
-| UC-08 | Operations incident and kill switch | Admin/operator | Health views and isolated stacks exist | P0 release control | Build alongside production deployment work |
+| UC-08 | Operations incident and kill switch | Admin/operator | Audited per-capability controls, global degraded state, health restrictions, and queue pausing locally verified | P0 release control | Exercise outage/restore paths alongside production deployment work |
 | UC-09 | Additional language/market rollout | Product owner and native reviewer | Four demo agents exist | P2 | Repeat evaluation independently per market/language |
 | UC-10 | Autonomous sales, underwriting, collections, or payments | Customer/end user | Not safely supported | Deferred | Keep explicitly out of scope |
 
 Priorities describe sequencing, not production readiness. UC-01 is the pilot product.
 UC-02 proves delivery only to the authenticated internal workspace inbox; it does not
 claim a phone transfer or delivery to an external customer system.
+
+## Current Status Snapshot
+
+### Completed local implementation
+
+- Grounded market/product-scoped voice and text assistance with citations and abstention.
+- Private Ask Veyra, editable explicit delivery, durable nudges, the first deterministic
+  India-loan playbook, and guidance-interaction measurement.
+- Durable internal handoff delivery/acknowledgement/resolution and grouped knowledge-gap
+  triage linked to published revisions.
+- Deterministic evidence-linked after-call drafts with immutable operator revisions,
+  proposed follow-ups, and acceptance history.
+- Disclosure-checklist authoring, different-admin approval, effective windows,
+  published-revision binding, conservative live shadow states, human confirmation, and
+  retirement. No customer checklist is bundled.
+- Per-capability operational controls with admin-only mutation, bounded reasons, audit
+  history, global restriction display, health reporting, and retry-preserving knowledge
+  queue pauses. Outbound delivery remains visibly unconfigured.
+- Admin-only manual QA with immutable rubric snapshots, deterministic call sampling,
+  transcript/citation-linked findings, weighted human scoring, immutable completion,
+  coaching history, reviewer agreement, and content-free aggregate export.
+
+The guidance-measurement, summary, disclosure, operational-control, and QA bullets are
+included in the 2026-10-07 provider-free automated and isolated-browser pass.
+
+### Next implementation and validation work
+
+1. Exercise UC-08 outage, queue, restore, and decommission paths against deployment-like failures.
+2. Validate UC-05 with a customer-owned rubric and multiple reviewers; decide reviewer-role
+   separation before any automated score suggestion.
+3. Add customer-owned playbook configuration and evidence warnings for edited guidance.
+4. Build UC-07 change-impact preview plus automatic gap/regression-case execution.
+5. Select one external handoff/CRM destination, then evaluate each additional language
+   and market independently.
 
 ## UC-01A: Live Guidance Console
 
@@ -66,11 +106,15 @@ wording, delivered wording, evidence, operator, and timestamps for review.
 
 ### Follow-up slices
 
+Delivered locally: guidance effectiveness measurement, provider-free evidence-linked
+summaries, and customer-owned disclosure-checklist infrastructure in shadow mode.
+
+Still planned:
+
 1. Customer-owned playbook configuration, approval, and effective versions.
 2. Sentence-level evidence warnings for operator edits.
-3. Evidence-linked summaries and manual QA/coaching.
-4. Customer-owned disclosure checklist in shadow mode.
-5. Supervisor whisper, then one selected CRM and handoff integration.
+3. Manual QA/coaching with immutable rubrics and reviewer evidence.
+4. Supervisor whisper, then one selected CRM and external handoff integration.
 
 Acceptance: private questions never appear in the archived transcript; an edited
 reply is delivered exactly once; replay cannot replace delivered wording; every
@@ -182,7 +226,7 @@ Implementation status: the provider-free slice is implemented. Completed calls n
 receive versioned deterministic drafts, evidence links, structured proposed follow-ups,
 operator revision/acceptance, and preserved audit history. Provider-backed asynchronous
 generation, retry UI, evaluation, and workflow execution remain open. Automated and
-browser verification is deferred to the final roadmap pass.
+isolated-browser verification passed on 2026-10-07.
 
 ### User outcome
 
@@ -219,6 +263,14 @@ Estimated effort: five to eight engineering days plus approved provider evaluati
 
 ## UC-05: QA Review and Coaching
 
+Implementation status: the first provider-free manual slice is implemented. Administrators
+can create immutable rubric versions, activate one version at a time, draw deterministic
+privacy-minimized samples, self-assign a completed call, save evidence-linked findings,
+complete an immutable weighted review, append attributed coaching notes, compare reviewer
+agreement, and export aggregates without transcript content. No AI score is produced.
+Customer rubric approval, a dedicated reviewer role/assignment queue, and real reviewer
+evaluation remain open. See [QA reviews](QA_REVIEWS.md).
+
 ### User outcome
 
 A reviewer samples completed calls, applies a versioned rubric, records evidence-linked
@@ -246,8 +298,8 @@ Implementation status: the guarded infrastructure and UI are implemented without
 bundled checklist. Administrators can create immutable scoped versions tied to published
 knowledge, a different administrator must approve them, effective periods cannot overlap,
 and Voice Studio shows conservative suggested states plus append-only human decisions.
-Customer/legal approval, a dedicated compliance-owner role, reviewed evaluation, and
-final automated/browser verification remain open. See
+Customer/legal approval, a dedicated compliance-owner role, and reviewed evaluation
+remain open. See
 [DISCLOSURE_CHECKLISTS.md](DISCLOSURE_CHECKLISTS.md).
 
 ### User outcome
@@ -299,39 +351,53 @@ twelve engineering days after checklist approval, excluding legal and policy wor
 - Test provider outage, corrupt snapshot, full disk, callback replay, secret rotation,
   restore, and tenant decommission procedures.
 
+Local implementation status: the authenticated control plane and enforcement slice is
+implemented. It covers new sessions, customer-answer generation, private guidance,
+guided delivery, proactive nudges, ingestion, and publication. Knowledge jobs paused by
+a control stay retryable without consuming their attempt budget; withdrawal and
+authenticated review remain available. The external-delivery control is intentionally
+non-operational until a connector exists. Repository restore/decommission tooling now has
+automated recovery coverage; production fault, encrypted-backup, and provider-account drills
+remain external deployment work. Local regression/browser verification passed
+on 2026-10-07.
+
 ## Delivery Sequence
 
-| Phase | Deliverable | Exit evidence |
-| --- | --- | --- |
-| 0 | Pilot decisions and data boundaries | Named workflow, handoff recipient, permitted data, retention, corpus owner, provider budget |
-| 1 | Internal Handoff Inbox | Durable requested-to-acknowledged flow; restart, duplicate, timeout, and authorization tests |
-| 2 | One selected external handoff adapter | Synthetic delivery and callback acknowledgement; operator-visible failures; runbook |
-| 3 | Knowledge-Gap Inbox | Scoped grouping, assignment, resolution-to-revision, regression case creation |
-| 4 | Evidence-linked summary | Versioned draft, provider/fallback behavior, human edit audit, curated evaluation |
-| 5 | Manual QA review | Versioned rubric, sampling, evidence-linked findings, aggregate export |
-| 6 | Disclosure checklist shadow mode | Customer-approved checklist, human confirmation, reviewed false-positive/negative set |
-| 7 | Controlled human-agent pilot | Security/restore/provider gates, training, monitoring, budget, incident owner, stop conditions |
+| Phase | Deliverable | Current state | Remaining exit evidence |
+| --- | --- | --- | --- |
+| 0 | Pilot decisions and data boundaries | External decision | Named workflow, permitted data, retention, corpus owner, provider budget |
+| 1 | Internal Handoff Inbox | Implemented and previously verified locally | Customer-selected external destination is separate work |
+| 2 | Knowledge-Gap Inbox | Operational local slice implemented and previously verified | Automatic regression execution and retention policy |
+| 3 | Evidence-linked summary | Provider-free versioned flow locally verified | Provider retry/usage path and curated accuracy evaluation |
+| 4 | Disclosure checklist shadow mode | Guarded infrastructure/UI locally verified | Customer approval and reviewed false-positive/negative set |
+| 5 | Manual QA review | First admin-only provider-free slice locally verified | Customer rubric, reviewer agreement evaluation, role/assignment decision |
+| 6 | Operational release controls | First control-plane/enforcement slice locally verified | Fault injection, incident/restore exercises, provider-account disable controls |
+| 7 | One selected external handoff adapter | Not implemented; destination unknown | Synthetic delivery/callback tests, visible failures, and runbook |
+| 8 | Controlled human-agent pilot | Not started | Security/provider gates, training, monitoring, budget, incident owner, stop conditions |
 
 Phases can overlap in engineering, but their exit evidence cannot be skipped. Do not add
 the effort estimates together as a delivery promise; re-estimate after Phase 0 decisions.
 
 ## Repository Implementation Map
 
-The first three slices fit the existing repository without replacing its service stack:
+Current implementation ownership and the remaining planned boundaries are:
 
-| Concern | Proposed location | Responsibility |
+| Concern | Location | Current responsibility/status |
 | --- | --- | --- |
-| Durable schema | `apps/api-gateway/src/services/database.js` plus an explicit migration helper | Add delivery/event/gap/summary tables and indexes without rewriting existing payloads |
-| Handoff domain | `apps/api-gateway/src/services/handoff-deliveries.js` | State machine, idempotency, retry policy, audit events, connector-neutral contract |
-| Handoff API | `apps/api-gateway/src/routes/handoffs.js` | Authenticated inbox/detail/actions and scoped connector callbacks |
-| Delivery process | `apps/api-gateway/src/handoff-worker.js` initially, promoted to a separately supervised process before external pilot | Claim due work, call one adapter, persist acknowledgement/failure, resume safely |
-| Connector adapter | `apps/api-gateway/src/integrations/handoffs/` | Internal inbox first; one customer-selected provider behind the same interface |
+| Durable schema | `apps/api-gateway/src/services/database.js` | Delivery, gap, summary, checklist, QA review/coaching, operational-control, and event tables exist; explicit migration tooling remains future hardening |
+| Handoff domain | `apps/api-gateway/src/services/handoff-deliveries.js` | Implemented internal-inbox persistence, escalation idempotency, reconciliation, manual transitions, and audit events; external retry/delivery states are absent |
+| Handoff API | `apps/api-gateway/src/routes/handoffs.js` | Implemented authenticated inbox/detail, acknowledge, and resolve actions; no provider callback endpoint exists |
+| Delivery process | Planned `apps/api-gateway/src/handoff-worker.js` or a separately supervised service | Not present; required only after an external destination is selected |
+| Connector adapter | Planned `apps/api-gateway/src/integrations/handoffs/` | Not present; internal inbox is the only delivery destination |
 | Gap capture | `apps/api-gateway/src/services/knowledge-gaps.js` | Classify eligible abstentions, fingerprint/minimize text, group occurrences, reopen resolved gaps |
-| Gap API | `apps/api-gateway/src/routes/knowledge-gaps.js` | List, triage, assign, resolve, and link revisions/evaluation cases |
-| Summary jobs | `apps/api-gateway/src/services/call-summaries.js` | Snapshot completed calls, generate/fallback, validate evidence links, retain versions |
-| UI | `HandoffInboxPage.jsx`, additions to `KnowledgeHubPage.jsx` and `CallHistoryPage.jsx` | Delivery operations, gap triage, summary review without inventing successful states |
-| Contracts | `docs/HANDOFF_DELIVERY.md`, `docs/KNOWLEDGE_GAPS.md`, `docs/CALL_SUMMARIES.md` | State transitions, permissions, retention, failure and recovery behavior |
-| Verification | Gateway integration tests plus connector contract fixtures and frontend build | Restart, duplicate, timeout, cross-workspace, late-callback, redaction, and accessibility cases |
+| Gap API | `apps/api-gateway/src/routes/knowledge-gaps.js` | List/detail and audited status/resolution updates with published-revision validation implemented; assignment and regression-case execution remain future work |
+| Summary flow | `apps/api-gateway/src/services/call-summaries.js` | Deterministic snapshot hash, fallback generation, evidence links, immutable revisions, and acceptance implemented; provider jobs remain future work |
+| Checklist flow | `apps/api-gateway/src/services/disclosure-checklists.js` | Scoped immutable versions, source/date approval gates, shadow evaluation, confirmations, and audit events implemented |
+| Operational controls | `apps/api-gateway/src/services/operational-controls.js`, `routes/operations.js`, voice/knowledge enforcement points | Audited controls and queue-safe pauses implemented; incident exercises and provider-account actions remain open |
+| QA review | `apps/api-gateway/src/services/qa-reviews.js`, `routes/qa.js` | Immutable rubric/review records, deterministic sampling, evidence checks, coaching, agreement, and aggregate export implemented; customer evaluation remains open |
+| UI | `HandoffInboxPage.jsx`, `CallHistoryPage.jsx`, `KnowledgeHubPage.jsx`, `VoiceStudioPage.jsx`, `OperationsPage.jsx`, `QAPage.jsx` and their components | Delivery, gap triage, summary/QA review, checklist governance, live shadow review, and operational restriction surfaces are present |
+| Contracts | `docs/CALL_SUMMARIES.md`, `docs/DISCLOSURE_CHECKLISTS.md`, `docs/QA_REVIEWS.md`, and domain documentation | Current behavior, limits, and non-claims documented; external connector contracts remain undecided |
+| Verification | Gateway/Python/tenant tests, frontend build, dependency audit, and browser flows | 2026-10-07 provider-free pass covers measurement, summary, checklist, controls, QA, tenant recovery, and the zero-advisory toolchain; live-provider and customer evidence remain open |
 
 Before adding a second asynchronous domain, extract common queue primitives only where
 the state and retry semantics are genuinely shared. Do not turn the knowledge-job table
@@ -341,9 +407,9 @@ into a generic payload queue or place customer-specific connector logic in voice
 
 ### Data and events
 
-- Add append-only domain events for escalation, delivery, summary, gap, QA, checklist,
-  and kill-switch transitions. Use workspace identity from the authenticated session,
-  never from client input.
+- Append-only events exist for escalation/delivery, gaps, summaries, checklist lifecycle,
+  checklist confirmations, QA/coaching, and operational-control changes. Continue to
+  derive workspace identity from the authenticated session, never client input.
 - Give every asynchronous operation an idempotency key, bounded retries, timestamps,
   and an operator-visible terminal state.
 - Record schema, rule, prompt, model, knowledge revision, and evaluation versions needed

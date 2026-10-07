@@ -1,5 +1,6 @@
 import express from 'express';
 import axios from 'axios';
+import { listOperationalControls } from '../services/operational-controls.js';
 
 const router = express.Router();
 
@@ -31,11 +32,15 @@ router.get('/', async (req, res) => {
         : { status: 'unavailable', error: result.reason?.message };
   });
 
-  const allOk = Object.values(services).every((s) => s?.status === 'ok');
+  const restrictions = listOperationalControls()
+    .filter((control) => control.available !== false && !control.enabled)
+    .map(({ key, label, reason, changed_at }) => ({ key, label, reason, changed_at }));
+  const allOk = Object.values(services).every((s) => s?.status === 'ok') && restrictions.length === 0;
   res.status(allOk ? 200 : 207).json({
     status: allOk ? 'healthy' : 'degraded',
     timestamp: new Date().toISOString(),
     services,
+    operational_restrictions: restrictions,
   });
 });
 

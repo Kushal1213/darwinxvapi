@@ -5,6 +5,7 @@ import {
   BarChart3,
   BookOpen,
   ChevronRight,
+  ClipboardCheck,
   History,
   Inbox,
   LayoutDashboard,
@@ -15,12 +16,14 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Phone,
+  ShieldCheck,
   Sun,
   Users,
   X,
 } from 'lucide-react';
 import { useWorkspaceAuth } from '../components/WorkspaceAuth';
 import { Brand, useTheme } from '../components/WorkspaceUI';
+import OperationalStatusBanner from '../components/OperationalStatusBanner';
 const groups = [
   {
     label: 'Workspace',
@@ -43,6 +46,8 @@ const groups = [
     label: 'Manage',
     items: [
       ['team', 'Team', Users],
+      ['qa', 'QA & Coaching', ClipboardCheck],
+      ['operations', 'Operations', ShieldCheck],
       ['architecture', 'Architecture', Network],
     ],
   },
@@ -105,7 +110,7 @@ export default function AppLayout({ activeTab, setActiveTab, children }) {
           <div className="nav-group" key={group.label}>
             <p className="nav-group-label">{group.label}</p>
             {group.items
-              .filter(([id]) => id !== 'team' || user.role === 'admin')
+              .filter(([id]) => !['team', 'qa', 'operations'].includes(id) || user.role === 'admin')
               .map(([id, label, Icon]) => (
                 <button
                   key={id}
@@ -236,6 +241,7 @@ export default function AppLayout({ activeTab, setActiveTab, children }) {
               {logoutError}
             </p>
           )}
+          <OperationalStatusBanner onOpen={() => navigate('operations')} />
           {children}
         </main>
         <footer className="workspace-footer">

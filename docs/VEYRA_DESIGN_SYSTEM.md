@@ -4,7 +4,7 @@ Implemented September 27, 2026 using the supplied Taste archive as contextual re
 
 ## Direction
 
-Calm operational software with a restrained blue accent, clear evidence, readable conversations, and consistent controls. The redesign covers authentication and every routed application page. It keeps the existing React, Vite, Tailwind 3, Lucide, Framer Motion, and Recharts stack.
+Calm operational software with a restrained blue accent, clear evidence, readable conversations, and consistent controls. The redesign covers authentication and every routed application page. It uses React 18, Vite 8, Tailwind 4, Lucide, Framer Motion, and Recharts.
 
 ## Foundations
 

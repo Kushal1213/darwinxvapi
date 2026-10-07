@@ -61,6 +61,11 @@ export function startJobWorker({ execute, complete, failed, recover, onError = c
       } catch (error) {
         transaction(() => {
           if (db.prepare('SELECT state FROM knowledge_jobs WHERE id = ?').get(job.id)?.state !== 'running') return;
+          if (error.paused) {
+            db.prepare("UPDATE knowledge_jobs SET state = 'retry', attempts = MAX(attempts - 1, 0), error = ?, next_attempt_at = ?, updated_at = ? WHERE id = ?")
+              .run(error.message, Date.now() + 15_000, Date.now(), job.id);
+            return;
+          }
           const terminal = error.permanent || job.attempts >= MAX_ATTEMPTS;
           const next = Date.now() + baseDelay * 2 ** (job.attempts - 1) + Math.floor(Math.random() * baseDelay);
           db.prepare('UPDATE knowledge_jobs SET state = ?, error = ?, next_attempt_at = ?, updated_at = ? WHERE id = ?')

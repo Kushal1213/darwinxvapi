@@ -28,9 +28,8 @@
   font-weight: 800;
   font-display: swap;
 }
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@config "../tailwind.config.js";
+@import "tailwindcss";
 
 @layer base {
   :root {
@@ -1324,4 +1323,293 @@
 
 body:has(.mobile-sidebar[open]) {
   overflow: hidden;
+}
+
+.operational-banner {
+  margin: 18px 36px 0;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid color-mix(in srgb, var(--warning) 50%, var(--line));
+  border-radius: 8px;
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 7%, var(--surface));
+}
+.operational-banner strong {
+  display: block;
+  font-size: 11px;
+}
+.operational-banner p {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.operational-banner .text-action {
+  flex-shrink: 0;
+}
+.operations-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.operation-card {
+  display: flex;
+  flex-direction: column;
+  gap: 17px;
+  min-width: 0;
+  padding: 21px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.operation-card.is-paused {
+  border-color: color-mix(in srgb, var(--warning) 55%, var(--line));
+}
+.operation-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.operation-card h2 {
+  font-size: 14px;
+  font-weight: 650;
+}
+.operation-card-header p,
+.operation-effect,
+.operation-current-reason {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.65;
+}
+.operation-effect {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 11px;
+  border-radius: 6px;
+  background: var(--surface-soft);
+}
+.operation-effect svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.operation-reason {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+.operation-reason textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+.operation-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.operation-actions small {
+  color: var(--subtle);
+  font-size: 9px;
+  text-align: right;
+}
+.operation-current-reason {
+  padding-left: 10px;
+  border-left: 2px solid var(--warning);
+}
+.qa-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(120px, 1fr)) auto;
+  align-items: end;
+  gap: 12px;
+}
+.qa-filter-grid label,
+.qa-criterion-editor label,
+.form-panel > label,
+.qa-finding-grid label,
+.qa-coaching-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+.qa-criterion-editor {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.5fr) 80px auto;
+  align-items: end;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.qa-rubric-card {
+  display: grid;
+  gap: 13px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+.qa-rubric-card h3,
+.qa-review-summary h3,
+.qa-other-reviews > h3 {
+  font-size: 12px;
+  font-weight: 650;
+}
+.qa-rubric-card p,
+.qa-review-summary > div p,
+.qa-start-review p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.65;
+}
+.qa-start-review {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+.qa-finding-editor {
+  min-width: 0;
+  padding: 17px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.qa-finding-editor legend {
+  padding: 0 7px;
+  font-size: 12px;
+  font-weight: 650;
+}
+.qa-finding-editor legend span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 500;
+}
+.qa-finding-editor > p {
+  margin-bottom: 13px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.65;
+}
+.qa-finding-grid {
+  display: grid;
+  grid-template-columns: 160px minmax(200px, 1fr) minmax(180px, 0.8fr);
+  gap: 12px;
+}
+.qa-review-summary {
+  display: grid;
+  gap: 13px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+.qa-score {
+  color: var(--ink);
+  font-size: 24px;
+  font-weight: 700;
+}
+.qa-score span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+}
+.qa-failure {
+  padding-left: 11px;
+  border-left: 2px solid var(--negative);
+}
+.qa-failure strong,
+.qa-coaching-history > strong {
+  font-size: 10px;
+}
+.qa-failure p,
+.qa-coaching-history p {
+  margin: 4px 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.65;
+}
+.qa-coaching-history {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.qa-coaching-history small {
+  color: var(--subtle);
+  font-size: 9px;
+}
+.qa-coaching-form {
+  display: grid;
+  gap: 12px;
+  padding-top: 5px;
+}
+.qa-coaching-form > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.qa-coaching-form > div p {
+  color: var(--muted);
+  font-size: 9px;
+}
+.qa-other-reviews {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 900px) {
+  .operations-grid {
+    grid-template-columns: 1fr;
+  }
+  .qa-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .qa-criterion-editor,
+  .qa-finding-grid {
+    grid-template-columns: 1fr;
+  }
+  .qa-criterion-editor .icon-button {
+    justify-self: start;
+  }
+}
+@media (max-width: 767px) {
+  .operational-banner {
+    margin: 12px 18px 0;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .operational-banner .text-action {
+    margin-left: 28px;
+  }
+  .operation-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .operation-actions small {
+    text-align: left;
+  }
+  .qa-filter-grid {
+    grid-template-columns: 1fr;
+  }
+  .qa-start-review,
+  .qa-coaching-form > div {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }

@@ -80,5 +80,9 @@ IDs and revisions, not document content.
 - No eligibility, lending, consent, or document-delivery decision is made.
 - The first slice does not provide checklist import, draft editing, diffing, reviewer
   disagreement analytics, or a customer compliance-owner role.
-- Customer/legal approval, reviewed false-positive and false-negative fixtures, final
-  automated tests, and browser verification remain required before pilot use.
+- Provider-free lifecycle coverage passed on 2026-10-07 for published-revision
+  governance, different-admin approval, overlapping-window rejection, role-filtered
+  listing, shadow evaluation, required decision notes, and append-only confirmation
+  history. Browser verification covered the live checklist surface and empty state;
+  customer/legal approval plus reviewed false-positive and false-negative fixtures
+  remain required before pilot use.

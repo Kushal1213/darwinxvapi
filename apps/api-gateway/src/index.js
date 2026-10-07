@@ -25,6 +25,8 @@ import analyticsRoutes from './routes/analytics.js';
 import handoffRoutes from './routes/handoffs.js';
 import knowledgeGapRoutes from './routes/knowledge-gaps.js';
 import disclosureChecklistRoutes from './routes/disclosure-checklists.js';
+import operationsRoutes from './routes/operations.js';
+import qaRoutes from './routes/qa.js';
 import { createAuthentication } from './services/auth.js';
 
 // Socket handler
@@ -73,6 +75,12 @@ app.use('/api/knowledge', (req, res, next) => ['GET', 'HEAD', 'OPTIONS'].include
 app.use('/api/knowledge/gaps', knowledgeGapRoutes);
 app.use('/api/disclosure-checklists', (req, res, next) => ['GET', 'HEAD', 'OPTIONS'].includes(req.method) ? next() : auth.requireAdmin(req, res, next));
 app.use('/api/disclosure-checklists', disclosureChecklistRoutes);
+app.use('/api/operations', (req, res, next) => {
+  const publicRead = ['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.path === '/controls';
+  return publicRead ? next() : auth.requireAdmin(req, res, next);
+});
+app.use('/api/operations', operationsRoutes);
+app.use('/api/qa', auth.requireAdmin, qaRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/rag', ragRoutes);
@@ -94,6 +102,8 @@ app.use((err, req, res, _next) => {
   logger.error(err, 'Unhandled error');
   res.status(err.status || 500).json({
     error: err.message || 'Internal server error',
+    ...(err.code && { code: err.code }),
+    ...(err.control && { control: err.control }),
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
   });
 });
