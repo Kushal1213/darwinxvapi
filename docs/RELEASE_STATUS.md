@@ -92,6 +92,8 @@ These cannot be completed truthfully from repository code alone:
 
 ## Verification Record — 2026-10-07
 
+- `npm run test:frontend`: **2 passed, 0 failed**, including autonomous reply delivery
+  as the Voice Studio default and approval mode as an explicit opt-in.
 - `npm run test --workspace apps/api-gateway`: **45 passed, 0 failed**.
 - `python -m unittest discover -s services -p 'test_*.py'`: **19 passed, 0 failed**.
 - `npm run test:tenants`: **3 passed, 0 failed**.
@@ -99,13 +101,15 @@ These cannot be completed truthfully from repository code alone:
 - `python services/grounding_eval.py --output evaluation/grounding_report.json`:
   **7 fixture cases passed, 0 failed**.
 - `npm run build --workspace apps/frontend`: Vite 8/Tailwind 4 production build passed
-  with **2,489 modules transformed**.
+  with **2,490 modules transformed**.
 - `npm audit`: **0 vulnerabilities across production and development dependencies**.
 - Isolated browser verification created a temporary workspace, paused and restored new
   sessions, observed the global degraded-state banner and attributed audit trail, created
   and activated a QA rubric, completed and archived a text call, completed an evidence-
   linked review, appended coaching, and verified Operations, QA, and Call Review at a
   390 px viewport without page-level horizontal overflow.
+- A second isolated browser verification confirmed that approval mode is off by default
+  and that an agent response is rendered immediately inside a new session.
 
 The verification used synthetic accounts, fixture knowledge, and provider-free paths.
 It does not establish live-provider quality or customer production readiness.

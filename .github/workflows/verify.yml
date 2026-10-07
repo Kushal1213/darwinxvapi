@@ -24,6 +24,8 @@ jobs:
           cache: pip
       - run: npm ci
       - run: python -m pip install -r services/requirements.txt
+      - name: Frontend behavior tests
+        run: npm run test:frontend
       - name: Gateway tests
         run: npm run test:gateway
       - name: Python tests

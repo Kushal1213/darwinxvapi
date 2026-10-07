@@ -145,10 +145,10 @@ dismiss active alerts, and record usefulness feedback in Mission Control or Call
 Review. See [operator nudge rules](docs/NUDGE_WORKFLOW.md) for expiry, priority,
 duplicate suppression, and the feedback API.
 
-Voice Studio enables **Agent-guided replies** by default. For grounded product
-questions, the bot pauses before answering and presents the cited response as a live
-tip. Selecting **Use this reply** records it as the next assistant turn and speaks it
-during a voice call; in text mode it appears in the conversation. A newer product
+Voice Studio replies automatically by default. For conversations that require human
+review, enable **Require approval before replying**. Grounded product answers then pause
+as cited live tips until an operator selects **Use this reply**; the approved answer is
+recorded as the next assistant turn and spoken during a voice call. A newer product
 question replaces an unselected older tip without displacing compliance or escalation
 alerts.
 
@@ -341,8 +341,9 @@ Run the complete provider-free release gate before opening a pull request:
 npm run verify
 ```
 
-This runs gateway, Python, tenant-isolation, provider-inventory, grounding, frontend-build,
-and dependency-audit checks. It does not contact paid model or voice providers.
+This runs frontend behavior, gateway, Python, tenant-isolation, provider-inventory,
+grounding, frontend-build, and dependency-audit checks. It does not contact paid model
+or voice providers.
 
 Check the running stack through:
 

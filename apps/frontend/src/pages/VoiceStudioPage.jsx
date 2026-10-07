@@ -11,6 +11,7 @@ import { useWorkspaceAuth } from '../components/WorkspaceAuth';
 import NudgeFeed from '../components/NudgeFeed';
 import LivePlaybook from '../components/LivePlaybook';
 import LiveDisclosureChecklist from '../components/LiveDisclosureChecklist';
+import { DEFAULT_GUIDED_MODE } from '../voice-session-mode.js';
 
 // ─── Market Profiles ──────────────────────────────────────────
 const MARKETS = {
@@ -117,7 +118,10 @@ export default function VoiceStudioPage() {
   const [micStatus, setMicStatus] = useState('unknown');
   const [useTextMode, setUseTextMode] = useState(false);
   const [isListening, setIsListening] = useState(false); // mic capturing
-  const [guidedMode, setGuidedMode] = useState(true);
+  // Voice Studio is an autonomous agent by default. Human review remains an
+  // explicit opt-in for regulated or supervised conversations; enabling it
+  // intentionally pauses each grounded answer until an operator approves it.
+  const [guidedMode, setGuidedMode] = useState(DEFAULT_GUIDED_MODE);
   const [guidanceQuestion, setGuidanceQuestion] = useState('');
   const [guidanceBusy, setGuidanceBusy] = useState(false);
   const [guidanceMessage, setGuidanceMessage] = useState('');
@@ -1091,9 +1095,9 @@ export default function VoiceStudioPage() {
                   onChange={(event) => setGuidedMode(event.target.checked)}
                 />
                 <span>
-                  <strong className="block">Agent-guided replies</strong>
+                  <strong className="block">Require approval before replying</strong>
                   <span className="block text-muted mt-1 leading-5">
-                    Pause grounded product answers until you select a live tip.
+                    When enabled, pause grounded answers until you approve a live tip.
                   </span>
                 </span>
               </label>
