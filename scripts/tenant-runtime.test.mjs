@@ -168,7 +168,15 @@ test('two complete tenant stacks isolate sessions, calls, realtime, knowledge an
     const frontend = config.env.FRONTEND_URL.replace('localhost', '127.0.0.1');
     for (const file of [join(config.directory, '.env'), join(config.directory, 'veyra.sqlite'), join(repository, 'data', 'veyra.sqlite')]) {
       const response = await fetch(frontend + '/@fs/' + file.replaceAll('\\', '/'));
-      assert.ok([403, 404].includes(response.status), 'Vite must not expose tenant storage');
+      const contentType = response.headers.get('content-type') || '';
+      const body = Buffer.from(await response.arrayBuffer());
+      const text = body.toString('utf8');
+      const blocked = [403, 404].includes(response.status);
+      const htmlFallback = response.status === 200 && contentType.includes('text/html') && /<!doctype html>/i.test(text);
+      assert.ok(blocked || htmlFallback, `Vite must not serve tenant storage (${file}: ${response.status} ${contentType})`);
+      assert.equal(text.includes('AUTH_SESSION_SECRET='), false, `Vite exposed tenant environment data from ${file}`);
+      assert.equal(text.includes(config.env.AUTH_SESSION_SECRET), false, `Vite exposed a tenant session secret from ${file}`);
+      assert.notEqual(body.subarray(0, 16).toString('utf8'), 'SQLite format 3\u0000', `Vite exposed a tenant database from ${file}`);
     }
   }
   await runtimes[0].stop();
